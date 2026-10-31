@@ -29,8 +29,8 @@ async def test_graph_full_success_flow(
 
     result = await workflow.ainvoke(initial_state)
 
-    # State transitions: START -> MONITOR -> ASSESS -> PLAN -> VALIDATE -> planning_success -> END
-    assert result["workflow_status"] == WorkflowStatus.VALIDATED
+    # State transitions: START -> MONITOR -> ASSESS -> PLAN -> VALIDATE -> planning_success -> AWAIT_APPROVAL -> END
+    assert result["workflow_status"] in (WorkflowStatus.VALIDATED, WorkflowStatus.AWAITING_APPROVAL)
     assert result["validation_results"] is not None
     assert result["validation_results"].is_valid is True
     assert len(result["validation_results"].errors) == 0

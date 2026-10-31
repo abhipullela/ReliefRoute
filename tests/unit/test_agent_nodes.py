@@ -244,8 +244,8 @@ async def test_execute_node_blocks_unauthorized():
 
 @pytest.mark.asyncio
 async def test_verify_node_placeholder():
-    """Verify verify_node is reserved and raises ReliefRouteError."""
+    """Verify verify_node handles uninitialized state safely."""
     state = create_initial_state()
-    with pytest.raises(ReliefRouteError) as exc_info:
-        await verify_node(state)
-    assert exc_info.value.error.code == ErrorCode.INTERNAL_ERROR
+    result = await verify_node(state)
+    assert result["workflow_status"] == WorkflowStatus.FAILED
+    assert any("missing" in err.lower() for err in result.get("errors", []))

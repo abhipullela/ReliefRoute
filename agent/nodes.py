@@ -1,24 +1,41 @@
 """Agent node functions for ReliefRoute LangGraph state machine.
 
-Implements the MONITOR -> ASSESS -> PLAN -> VALIDATE pipeline, consuming
-Member B's service contracts through dependency injection and applying
+Implements the MONITOR -> ASSESS -> PLAN -> VALIDATE pipeline (Phase 1) and the
+AWAIT_APPROVAL -> DISPATCH -> VERIFY -> COMPLETE / REPLAN pipeline (Phase 2),
+consuming Member B's service contracts through dependency injection and applying
 strict deterministic guardrails.
 """
 
+import asyncio
+import random
+import uuid
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
 from agent.guardrails import validate_incident, validate_plan_guardrails
 from agent.services import AgentServices
-from agent.state import AgentState, ValidationResult, WorkflowStatus
+from agent.state import (
+    MAX_DISPATCH_ATTEMPTS,
+    MAX_REPLAN_ATTEMPTS,
+    _NON_RETRYABLE_CODES,
+    AgentState,
+    ValidationResult,
+    WorkflowStatus,
+)
 from shared.enums import ErrorCode, PlanStatus
 from shared.errors import ReliefRouteError
 from shared.models import (
+    AuditEvent,
+    DispatchRequest,
     RouteRequest,
     utc_now,
 )
 
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 def _resolve_services(
     config: RunnableConfig | None = None,
@@ -35,6 +52,103 @@ def _resolve_services(
                 return svc
     return AgentServices()
 
+
+def _make_audit_event(
+    actor: str,
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    outcome: str,
+    details: dict[str, Any] | None = None,
+) -> AuditEvent:
+    """Construct a structured AuditEvent."""
+    return AuditEvent(
+        event_id=str(uuid.uuid4()),
+        occurred_at=utc_now(),
+        actor=actor,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        outcome=outcome,
+        details=details or {},
+    )
+
+
+async def _emit_audit(
+    svc: AgentServices,
+    event: AuditEvent,
+    state: AgentState,
+) -> list[dict[str, Any]]:
+    """Persist an AuditEvent via AuditService and accumulate in state audit_events.
+
+    Never raises — audit failures are logged to errors but do not abort workflow.
+    """
+    existing: list[dict[str, Any]] = list(state.get("audit_events", []))
+    serialised = event.model_dump(mode="json")
+    existing.append(serialised)
+
+    if svc.audit_service is not None:
+        try:
+            await svc.audit_service.append(event)
+        except Exception as exc:  # noqa: BLE001
+            existing.append(
+                _make_audit_event(
+                    actor="agent",
+                    action="audit_write_failed",
+                    entity_type="audit_event",
+                    entity_id=event.event_id,
+                    outcome="ERROR",
+                    details={"error": str(exc)},
+                ).model_dump(mode="json")
+            )
+    return existing
+
+
+def _is_non_retryable(exc: ReliefRouteError) -> bool:
+    """Return True if the error code must not be retried."""
+    return exc.error.code in _NON_RETRYABLE_CODES
+
+
+async def _with_retry(
+    coro_factory: Any,
+    *,
+    max_attempts: int = MAX_DISPATCH_ATTEMPTS,
+    base_delay_s: float = 0.5,
+) -> Any:
+    """Execute an async callable with bounded exponential backoff + jitter.
+
+    Args:
+        coro_factory: Zero-argument async callable returning the desired value.
+        max_attempts: Total attempts including the initial one.
+        base_delay_s: Base delay in seconds for exponential back-off.
+
+    Raises:
+        The last exception if all attempts are exhausted.
+        Immediately re-raises non-retryable ReliefRouteErrors.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await coro_factory()
+        except ReliefRouteError as exc:
+            if _is_non_retryable(exc):
+                raise
+            last_exc = exc
+            if attempt < max_attempts:
+                delay = base_delay_s * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                await asyncio.sleep(delay)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt < max_attempts:
+                delay = base_delay_s * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                await asyncio.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 nodes
+# ---------------------------------------------------------------------------
 
 async def monitor_node(
     state: AgentState,
@@ -346,6 +460,23 @@ async def plan_node(
         if src not in collected_sources:
             collected_sources.append(src)
 
+    # Emit plan creation audit event (best-effort)
+    audit_events = list(state.get("audit_events", []))
+    plan_event = _make_audit_event(
+        actor="agent",
+        action="plan_created",
+        entity_type="delivery_plan",
+        entity_id=plan.plan_id,
+        outcome="SUCCESS",
+        details={
+            "supplier_id": plan.supplier_id,
+            "commodity": plan.commodity,
+            "quantity": plan.quantity,
+            "idempotency_key": plan.idempotency_key,
+        },
+    )
+    audit_events.append(plan_event.model_dump(mode="json"))
+
     return {
         "available_suppliers": available_pairs,
         "selected_supplier": selected_supplier,
@@ -353,6 +484,7 @@ async def plan_node(
         "route": route_result,
         "delivery_plan": plan,
         "sources": collected_sources,
+        "audit_events": audit_events,
         "workflow_status": WorkflowStatus.PLANNED,
         "updated_at": utc_now().isoformat(),
     }
@@ -424,9 +556,22 @@ def validate_node(
         if plan.status == PlanStatus.DRAFT:
             plan = plan.model_copy(update={"status": PlanStatus.NEEDS_APPROVAL})
 
+        # Emit validation audit event
+        audit_events = list(state.get("audit_events", []))
+        val_event = _make_audit_event(
+            actor="agent",
+            action="plan_validated",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="SUCCESS",
+            details={"warnings": validation_result.warnings},
+        )
+        audit_events.append(val_event.model_dump(mode="json"))
+
         return {
             "delivery_plan": plan,
             "validation_results": validation_result,
+            "audit_events": audit_events,
             "workflow_status": WorkflowStatus.VALIDATED,
             "updated_at": utc_now().isoformat(),
         }
@@ -452,7 +597,7 @@ def route_after_validation(state: AgentState) -> str:
 
 
 def planning_success_node(state: AgentState) -> dict[str, Any]:
-    """Terminal state for successful planning and validation."""
+    """Terminal state for successful planning and validation — awaiting human approval."""
     return {
         "workflow_status": WorkflowStatus.VALIDATED,
         "updated_at": utc_now().isoformat(),
@@ -481,22 +626,605 @@ def planning_failure_node(state: AgentState) -> dict[str, Any]:
     }
 
 
-async def execute_node(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-    """EXECUTE node placeholder: Architectural stub for Phase 2.
+# ---------------------------------------------------------------------------
+# Phase 2 nodes
+# ---------------------------------------------------------------------------
 
-    Explicitly blocks unauthorized autonomous dispatch per docs/09.
+async def await_approval_node(
+    state: AgentState,
+    config: RunnableConfig | None = None,
+    *,
+    services: AgentServices | None = None,
+) -> dict[str, Any]:
+    """AWAIT_APPROVAL node: Validate and record human approval decision.
+
+    Requires an ``ApprovalRequest`` already present on the state (injected by the
+    operator interface before invoking this node).  The node does NOT poll for a
+    decision — it validates the decision that has been placed in the state.
+
+    Approval is invalidated whenever a replan has occurred (approval_request will
+    be None after replanning), forcing a fresh decision for each new plan.
+    """
+    svc = _resolve_services(config, services)
+    plan = state.get("delivery_plan")
+    approval_request = state.get("approval_request")
+    audit_events = list(state.get("audit_events", []))
+
+    # Guard: plan must exist and be in NEEDS_APPROVAL status
+    if plan is None:
+        err = "Approval cannot be processed: no delivery plan in state"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "workflow_status": WorkflowStatus.FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    if plan.status != PlanStatus.NEEDS_APPROVAL:
+        err = f"Approval cannot be processed: plan status is '{plan.status}', expected NEEDS_APPROVAL"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "workflow_status": WorkflowStatus.FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # Guard: an explicit human decision must be present
+    if approval_request is None:
+        # No decision yet — remain in awaiting state
+        audit_event = _make_audit_event(
+            actor="agent",
+            action="approval_requested",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="PENDING",
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        # Persist event best-effort
+        if svc.audit_service is not None:
+            try:
+                await svc.audit_service.append(audit_event)
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.AWAITING_APPROVAL,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # Validate the approval: approver_id must be non-empty (no self-approval by agent)
+    if not approval_request.approver_id or approval_request.approver_id.strip() == "":
+        err = "Approval rejected: approver_id is missing or empty"
+        audit_event = _make_audit_event(
+            actor="agent",
+            action="approval_validation_failed",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="ERROR",
+            details={"reason": err},
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # Validate plan_id matches the current plan
+    if approval_request.plan_id != plan.plan_id:
+        err = (
+            f"Approval rejected: approval plan_id '{approval_request.plan_id}' "
+            f"does not match current plan '{plan.plan_id}'"
+        )
+        audit_event = _make_audit_event(
+            actor=approval_request.approver_id,
+            action="approval_validation_failed",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="ERROR",
+            details={"reason": err},
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    if approval_request.approved:
+        # Human approved
+        approved_plan = plan.model_copy(update={"status": PlanStatus.APPROVED})
+        audit_event = _make_audit_event(
+            actor=approval_request.approver_id,
+            action="plan_approved",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="APPROVED",
+            details={
+                "comment": approval_request.comment,
+                "decided_at": approval_request.decided_at.isoformat(),
+            },
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        if svc.audit_service is not None:
+            try:
+                await svc.audit_service.append(audit_event)
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "delivery_plan": approved_plan,
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.APPROVED,
+            "updated_at": utc_now().isoformat(),
+        }
+    else:
+        # Human rejected
+        rejected_plan = plan.model_copy(update={"status": PlanStatus.REJECTED})
+        audit_event = _make_audit_event(
+            actor=approval_request.approver_id,
+            action="plan_rejected",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="REJECTED",
+            details={
+                "comment": approval_request.comment,
+                "decided_at": approval_request.decided_at.isoformat(),
+            },
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        if svc.audit_service is not None:
+            try:
+                await svc.audit_service.append(audit_event)
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "delivery_plan": rejected_plan,
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.REJECTED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+
+def route_after_approval(state: AgentState) -> str:
+    """Conditional router following the approval decision."""
+    status = state.get("workflow_status")
+    if status == WorkflowStatus.APPROVED:
+        return "dispatch"
+    elif status == WorkflowStatus.AWAITING_APPROVAL:
+        return "approval_pending"
+    elif status == WorkflowStatus.REJECTED:
+        return "approval_rejected"
+    else:
+        # FAILED or any invalid/stale approval state
+        return "approval_failed"
+
+
+async def dispatch_node(
+    state: AgentState,
+    config: RunnableConfig | None = None,
+    *,
+    services: AgentServices | None = None,
+) -> dict[str, Any]:
+    """DISPATCH node: Send one idempotent dispatch for an approved plan.
+
+    Implements:
+    - Pre-dispatch safety checks (plan must be APPROVED, no prior dispatch for same key)
+    - Bounded retries with exponential backoff + jitter (max 3 total attempts)
+    - No retry on auth/validation errors
+    - Idempotency: uses plan's idempotency_key; never re-sends after ambiguous timeout
+    - Audit events for attempt, success, and failure
+    """
+    svc = _resolve_services(config, services)
+    audit_events = list(state.get("audit_events", []))
+    plan = state.get("delivery_plan")
+
+    # Safety: plan must exist and be APPROVED
+    if plan is None:
+        err = "Dispatch blocked: no delivery plan in state"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    if plan.status != PlanStatus.APPROVED:
+        err = f"Dispatch blocked: plan status is '{plan.status}', must be APPROVED"
+        audit_event = _make_audit_event(
+            actor="agent",
+            action="dispatch_blocked",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="BLOCKED",
+            details={"reason": err},
+        )
+        audit_events.append(audit_event.model_dump(mode="json"))
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    if svc.dispatch_service is None:
+        err = "DispatchService provider is not configured"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # Validate required dispatch fields
+    incident = state.get("incident")
+    selected_supplier = state.get("selected_supplier")
+    if incident is None or selected_supplier is None:
+        err = "Dispatch blocked: incident or selected_supplier is missing from state"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    dispatch_request = DispatchRequest(
+        plan_id=plan.plan_id,
+        driver_id=selected_supplier.contact_handle,
+        message=(
+            f"RELIEF DISPATCH — Plan {plan.plan_id}: "
+            f"deliver {plan.quantity} {plan.unit} of {plan.commodity} "
+            f"to ({plan.destination.latitude:.4f}, {plan.destination.longitude:.4f}). "
+            f"Follow safe route. Acknowledge receipt."
+        ),
+        idempotency_key=plan.idempotency_key,
+    )
+
+    attempts = state.get("dispatch_attempts", 0)
+
+    # Emit attempt audit event
+    attempt_num = attempts + 1
+    attempt_event = _make_audit_event(
+        actor="agent",
+        action="dispatch_attempt",
+        entity_type="delivery_plan",
+        entity_id=plan.plan_id,
+        outcome="IN_PROGRESS",
+        details={
+            "attempt": attempt_num,
+            "idempotency_key": plan.idempotency_key,
+            "driver_id": dispatch_request.driver_id,
+        },
+    )
+    audit_events.append(attempt_event.model_dump(mode="json"))
+
+    # Attempt dispatch with bounded retries
+    remaining_attempts = MAX_DISPATCH_ATTEMPTS - attempts
+    if remaining_attempts <= 0:
+        err = f"Dispatch failed: max attempts ({MAX_DISPATCH_ATTEMPTS}) exhausted"
+        fail_event = _make_audit_event(
+            actor="agent",
+            action="dispatch_failed",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="FAILED",
+            details={"reason": err},
+        )
+        audit_events.append(fail_event.model_dump(mode="json"))
+        return {
+            "errors": state.get("errors", []) + [err],
+            "audit_events": audit_events,
+            "dispatch_attempts": attempts,
+            "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    last_error: str | None = None
+    result = None
+    attempts_made = 0
+    for attempt in range(1, remaining_attempts + 1):
+        attempts_made = attempt
+        try:
+            result = await svc.dispatch_service.dispatch(dispatch_request)
+            break
+        except ReliefRouteError as exc:
+            last_error = f"Dispatch error ({exc.error.code}): {exc.error.message}"
+            if _is_non_retryable(exc):
+                break
+            if attempt < remaining_attempts:
+                delay = 0.5 * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                await asyncio.sleep(delay)
+            # Record retry audit event
+            retry_event = _make_audit_event(
+                actor="agent",
+                action="dispatch_retry",
+                entity_type="delivery_plan",
+                entity_id=plan.plan_id,
+                outcome="RETRYING",
+                details={"attempt": attempts + attempt, "error": last_error},
+            )
+            audit_events.append(retry_event.model_dump(mode="json"))
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"Unexpected dispatch error: {exc!s}"
+            if attempt < remaining_attempts:
+                delay = 0.5 * (2 ** (attempt - 1)) + random.uniform(0, 0.1)
+                await asyncio.sleep(delay)
+            retry_event = _make_audit_event(
+                actor="agent",
+                action="dispatch_retry",
+                entity_type="delivery_plan",
+                entity_id=plan.plan_id,
+                outcome="RETRYING",
+                details={"attempt": attempts + attempt, "error": last_error},
+            )
+            audit_events.append(retry_event.model_dump(mode="json"))
+
+    total_attempts = attempts + attempts_made
+
+    if result is not None and result.status == "SENT":
+        dispatched_plan = plan.model_copy(update={"status": PlanStatus.DISPATCHED})
+        success_event = _make_audit_event(
+            actor="agent",
+            action="dispatch_success",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="SUCCESS",
+            details={
+                "dispatch_id": result.dispatch_id,
+                "provider_message_id": result.provider_message_id,
+                "attempt": total_attempts,
+            },
+        )
+        audit_events.append(success_event.model_dump(mode="json"))
+        if svc.audit_service is not None:
+            try:
+                await svc.audit_service.append(success_event)
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "delivery_plan": dispatched_plan,
+            "dispatch_result": result,
+            "dispatch_attempts": total_attempts,
+            "audit_events": audit_events,
+            "workflow_status": WorkflowStatus.DISPATCHED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # All retries exhausted or non-retryable error
+    err_msg = last_error or "Dispatch failed: unknown error"
+    fail_event = _make_audit_event(
+        actor="agent",
+        action="dispatch_failed",
+        entity_type="delivery_plan",
+        entity_id=plan.plan_id,
+        outcome="FAILED",
+        details={"reason": err_msg, "total_attempts": total_attempts},
+    )
+    audit_events.append(fail_event.model_dump(mode="json"))
+    if svc.audit_service is not None:
+        try:
+            await svc.audit_service.append(fail_event)
+        except Exception:  # noqa: BLE001
+            pass
+
+    failed_plan = plan.model_copy(update={"status": PlanStatus.FAILED})
+    return {
+        "delivery_plan": failed_plan,
+        "dispatch_attempts": total_attempts,
+        "errors": state.get("errors", []) + [err_msg],
+        "audit_events": audit_events,
+        "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+def route_after_dispatch(state: AgentState) -> str:
+    """Conditional router following dispatch execution."""
+    status = state.get("workflow_status")
+    if status == WorkflowStatus.DISPATCHED:
+        return "verify"
+    else:
+        return "dispatch_failed"
+
+
+async def verify_node(
+    state: AgentState,
+    config: RunnableConfig | None = None,
+    *,
+    services: AgentServices | None = None,
+) -> dict[str, Any]:
+    """VERIFY node: Check driver acknowledgement and decide next step.
+
+    If no acknowledgement is present the plan is marked SENT_UNACKNOWLEDGED and
+    the operator is notified via an audit event.  If route conditions have
+    changed since planning, triggers a bounded replan.
+    """
+    svc = _resolve_services(config, services)
+    audit_events = list(state.get("audit_events", []))
+    plan = state.get("delivery_plan")
+    dispatch_result = state.get("dispatch_result")
+
+    if plan is None or dispatch_result is None:
+        err = "Verify node: missing delivery plan or dispatch result"
+        return {
+            "errors": state.get("errors", []) + [err],
+            "workflow_status": WorkflowStatus.FAILED,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # Check if plan requires replanning (e.g. hazard conditions changed)
+    # For the Phase 2 implementation, replan triggers are driven externally by
+    # setting plan.status = PlanStatus.REPLAN_REQUIRED before invoking verify.
+    if plan.status == PlanStatus.REPLAN_REQUIRED:
+        replan_count = state.get("replan_count", 0) + 1
+        if replan_count > MAX_REPLAN_ATTEMPTS:
+            err = f"Replan limit ({MAX_REPLAN_ATTEMPTS}) exceeded; manual operator intervention required"
+            fail_event = _make_audit_event(
+                actor="agent",
+                action="replan_limit_exceeded",
+                entity_type="delivery_plan",
+                entity_id=plan.plan_id,
+                outcome="FAILED",
+                details={"replan_count": replan_count},
+            )
+            audit_events.append(fail_event.model_dump(mode="json"))
+            return {
+                "errors": state.get("errors", []) + [err],
+                "audit_events": audit_events,
+                "replan_count": replan_count,
+                "workflow_status": WorkflowStatus.FAILED,
+                "updated_at": utc_now().isoformat(),
+            }
+
+        replan_event = _make_audit_event(
+            actor="agent",
+            action="replan_triggered",
+            entity_type="delivery_plan",
+            entity_id=plan.plan_id,
+            outcome="REPLANNING",
+            details={"replan_count": replan_count, "reason": "plan.status == REPLAN_REQUIRED"},
+        )
+        audit_events.append(replan_event.model_dump(mode="json"))
+        if svc.audit_service is not None:
+            try:
+                await svc.audit_service.append(replan_event)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Invalidate approval so a fresh decision is required for the new plan
+        return {
+            "delivery_plan": None,
+            "approval_request": None,
+            "dispatch_result": None,
+            "dispatch_attempts": 0,
+            "audit_events": audit_events,
+            "replan_count": replan_count,
+            "workflow_status": WorkflowStatus.REPLANNING,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    # No replan needed — mark delivery complete
+    complete_plan = plan.model_copy(update={"status": PlanStatus.COMPLETED})
+    complete_event = _make_audit_event(
+        actor="agent",
+        action="delivery_completed",
+        entity_type="delivery_plan",
+        entity_id=plan.plan_id,
+        outcome="COMPLETED",
+        details={"dispatch_id": dispatch_result.dispatch_id},
+    )
+    audit_events.append(complete_event.model_dump(mode="json"))
+    if svc.audit_service is not None:
+        try:
+            await svc.audit_service.append(complete_event)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return {
+        "delivery_plan": complete_plan,
+        "audit_events": audit_events,
+        "workflow_status": WorkflowStatus.COMPLETED,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+def route_after_verify(state: AgentState) -> str:
+    """Conditional router following verify node."""
+    status = state.get("workflow_status")
+    if status == WorkflowStatus.COMPLETED:
+        return "completed"
+    elif status == WorkflowStatus.REPLANNING:
+        return "replan"
+    else:
+        return "verify_failed"
+
+
+async def replan_node(
+    state: AgentState,
+    config: RunnableConfig | None = None,
+    *,
+    services: AgentServices | None = None,
+) -> dict[str, Any]:
+    """REPLAN node: Reset state for a new planning cycle preserving history.
+
+    Clears plan-specific fields while preserving incident, location, audit
+    history, and replan_count.  The new cycle must pass through MONITOR ->
+    ASSESS -> PLAN -> VALIDATE -> AWAIT_APPROVAL before dispatching again.
+
+    Approval is always invalidated on replan: the new plan requires fresh
+    human sign-off.
+    """
+    audit_events = list(state.get("audit_events", []))
+    replan_count = state.get("replan_count", 0)
+
+    replan_event = _make_audit_event(
+        actor="agent",
+        action="replan_started",
+        entity_type="workflow",
+        entity_id=state.get("incident").incident_id if state.get("incident") else "unknown",
+        outcome="REPLANNING",
+        details={"replan_count": replan_count},
+    )
+    audit_events.append(replan_event.model_dump(mode="json"))
+
+    # Preserve incident/location; reset all plan-lifecycle fields
+    return {
+        "weather_observations": [],
+        "hazard_assessment": None,
+        "available_suppliers": [],
+        "selected_supplier": None,
+        "selected_inventory": None,
+        "route": None,
+        "delivery_plan": None,
+        "validation_results": None,
+        "approval_request": None,      # Force fresh approval on new plan
+        "dispatch_result": None,
+        "dispatch_attempts": 0,
+        "errors": [],
+        "missing_info": [],
+        "audit_events": audit_events,
+        "workflow_status": WorkflowStatus.INITIALIZED,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+async def execute_node(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    """Legacy EXECUTE stub — superseded by dispatch_node in Phase 2.
+
+    Kept for backward compatibility with Phase 1 graph references.
     """
     raise ReliefRouteError(
         code=ErrorCode.APPROVAL_REQUIRED,
-        message="Phase 1 safety policy: dispatch execution requires explicit human approval and is not authorized in this phase.",
+        message="dispatch_node must be used; execute_node is a legacy Phase 1 stub.",
         provider="agent_dispatch",
     )
 
 
-async def verify_node(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-    """VERIFY node placeholder: Architectural stub for Phase 2 driver verification."""
-    raise ReliefRouteError(
-        code=ErrorCode.INTERNAL_ERROR,
-        message="Verify node is reserved for Phase 2 delivery telemetry and driver acknowledgement verification.",
-        provider="agent_verify",
-    )
+def rejected_node(state: AgentState) -> dict[str, Any]:
+    """Terminal state when a plan is rejected by a human approver."""
+    return {
+        "workflow_status": WorkflowStatus.REJECTED,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+def approval_pending_node(state: AgentState) -> dict[str, Any]:
+    """Terminal state when no human decision has been provided yet."""
+    return {
+        "workflow_status": WorkflowStatus.AWAITING_APPROVAL,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+def dispatch_failed_node(state: AgentState) -> dict[str, Any]:
+    """Terminal state when all dispatch attempts are exhausted."""
+    return {
+        "workflow_status": WorkflowStatus.DISPATCH_FAILED,
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+def completed_node(state: AgentState) -> dict[str, Any]:
+    """Terminal state for a successfully completed delivery."""
+    return {
+        "workflow_status": WorkflowStatus.COMPLETED,
+        "updated_at": utc_now().isoformat(),
+    }

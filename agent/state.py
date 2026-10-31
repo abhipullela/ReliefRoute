@@ -6,8 +6,10 @@ from typing import Any, TypedDict
 from pydantic import Field
 
 from shared.models import (
+    ApprovalRequest,
     ContractModel,
     DeliveryPlan,
+    DispatchResult,
     HazardAssessment,
     InventoryItem,
     LatLon,
@@ -52,19 +54,54 @@ class WorkflowStatus:
     PLANNING = "PLANNING"
     PLANNED = "PLANNED"
     VALIDATING = "VALIDATING"
-    VALIDATED = "VALIDATED"  # Successful planning state
-    NEEDS_INFO = "NEEDS_INFO"  # Invalid plan due to missing information
-    FAILED = "FAILED"  # General failure state
-    DEGRADED = "DEGRADED"  # Upstream provider unavailable
+    VALIDATED = "VALIDATED"            # Successful planning; pending human approval
+    NEEDS_INFO = "NEEDS_INFO"          # Invalid plan due to missing information
+    FAILED = "FAILED"                  # General failure state
+    DEGRADED = "DEGRADED"              # Upstream provider unavailable
     NO_FEASIBLE_PLAN = "NO_FEASIBLE_PLAN"  # No eligible supplier/route found
-    BLOCKED = "BLOCKED"  # Blocked by guardrails
+    BLOCKED = "BLOCKED"                # Blocked by guardrails
+
+    # Phase 2 statuses
+    AWAITING_APPROVAL = "AWAITING_APPROVAL"   # Waiting for human decision
+    APPROVED = "APPROVED"                      # Human approved; ready for dispatch
+    REJECTED = "REJECTED"                      # Human rejected; dispatch blocked
+    DISPATCHING = "DISPATCHING"                # Dispatch in progress
+    DISPATCHED = "DISPATCHED"                  # Successfully dispatched
+    DISPATCH_FAILED = "DISPATCH_FAILED"        # Dispatch attempt failed
+    VERIFYING = "VERIFYING"                    # Awaiting driver acknowledgement
+    COMPLETED = "COMPLETED"                    # Delivery confirmed complete
+    REPLANNING = "REPLANNING"                  # Replanning due to changed conditions
+
+
+# Statuses that indicate an upstream failure which must propagate downstream
+_UPSTREAM_FAILURE_STATUSES = frozenset([
+    WorkflowStatus.DEGRADED,
+    WorkflowStatus.NEEDS_INFO,
+    WorkflowStatus.FAILED,
+])
+
+# Error codes that should NOT be retried
+_NON_RETRYABLE_CODES = frozenset([
+    "UPSTREAM_AUTH_FAILED",
+    "VALIDATION_ERROR",
+    "CONFLICT",
+])
+
+# Max replanning attempts before surfacing FAILED_NEEDS_OPERATOR
+MAX_REPLAN_ATTEMPTS: int = 3
+
+# Retry policy: 1 initial + up to 2 retries = 3 total attempts
+MAX_DISPATCH_ATTEMPTS: int = 3
 
 
 class AgentState(TypedDict, total=False):
     """The central state dictionary flowing through LangGraph."""
 
+    # Core incident and location
     incident: IncidentInfo | None
     location: LatLon | None
+
+    # Planning inputs
     weather_observations: list[WeatherObservation]
     hazard_assessment: HazardAssessment | None
     available_suppliers: list[tuple[Supplier, InventoryItem]]
@@ -72,11 +109,22 @@ class AgentState(TypedDict, total=False):
     selected_inventory: InventoryItem | None
     route: RouteResult | None
     delivery_plan: DeliveryPlan | None
-    workflow_status: str
+
+    # Validation
     validation_results: ValidationResult | None
+
+    # Phase 2: Approval, dispatch, verification
+    approval_request: ApprovalRequest | None   # The human decision record
+    dispatch_result: DispatchResult | None      # Latest dispatch outcome
+    dispatch_attempts: int                       # Running retry count
+
+    # Workflow tracking
+    workflow_status: str
+    replan_count: int                            # Bounded replan attempts
     errors: list[str]
     missing_info: list[str]
     sources: list[SourceRef]
+    audit_events: list[dict[str, Any]]           # Serialised AuditEvent records
     created_at: str
     updated_at: str
 
@@ -114,9 +162,14 @@ def create_initial_state(
         "delivery_plan": None,
         "workflow_status": WorkflowStatus.INITIALIZED,
         "validation_results": None,
+        "approval_request": None,
+        "dispatch_result": None,
+        "dispatch_attempts": 0,
+        "replan_count": 0,
         "errors": [],
         "missing_info": [],
         "sources": [],
+        "audit_events": [],
         "created_at": now_iso,
         "updated_at": now_iso,
     }

@@ -8,6 +8,8 @@ from agent.services import AgentServices
 from agent.state import IncidentInfo
 from shared.enums import RiskLevel
 from shared.models import (
+    AuditEvent,
+    DispatchResult,
     HazardAssessment,
     InventoryItem,
     LatLon,
@@ -19,6 +21,10 @@ from shared.models import (
     utc_now,
 )
 
+
+# ---------------------------------------------------------------------------
+# Shared sample fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def sample_origin() -> LatLon:
@@ -133,6 +139,10 @@ def sample_incident(sample_destination: LatLon) -> IncidentInfo:
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 1 mock services
+# ---------------------------------------------------------------------------
+
 class MockWeatherService:
     """Mock WeatherService conforming to shared.contracts.WeatherService Protocol."""
 
@@ -207,6 +217,81 @@ class MockRoutingService:
         return self.route_result
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 mock services
+# ---------------------------------------------------------------------------
+
+class MockApprovalService:
+    """Mock ApprovalService conforming to shared.contracts.ApprovalService Protocol."""
+
+    def __init__(self, result_plan=None, error: Exception | None = None):
+        self.result_plan = result_plan
+        self.error = error
+        self.calls: list = []
+
+    async def decide(self, request) -> object:
+        self.calls.append(request)
+        if self.error:
+            raise self.error
+        return self.result_plan
+
+
+class MockDispatchService:
+    """Mock DispatchService conforming to shared.contracts.DispatchService Protocol."""
+
+    def __init__(
+        self,
+        result: DispatchResult | None = None,
+        errors: list[Exception] | None = None,
+    ):
+        """Args:
+            result: The DispatchResult to return on success.
+            errors: Optional list of exceptions to raise in order on successive calls.
+                    Once exhausted, result is returned.
+        """
+        self.result = result
+        self._errors = list(errors or [])
+        self.calls: list = []
+        self.acknowledgement_calls: list = []
+
+    async def dispatch(self, request) -> DispatchResult:
+        self.calls.append(request)
+        if self._errors:
+            exc = self._errors.pop(0)
+            raise exc
+        assert self.result is not None
+        return self.result
+
+    async def record_acknowledgement(self, ack) -> AuditEvent:
+        self.acknowledgement_calls.append(ack)
+        import uuid
+        return AuditEvent(
+            event_id=str(uuid.uuid4()),
+            actor="driver",
+            action="acknowledged",
+            entity_type="delivery_plan",
+            entity_id=ack.plan_id,
+            outcome="ACKNOWLEDGED",
+        )
+
+
+class MockAuditService:
+    """Mock AuditService conforming to shared.contracts.AuditService Protocol."""
+
+    def __init__(self, error: Exception | None = None):
+        self.events: list[AuditEvent] = []
+        self.error = error
+
+    async def append(self, event: AuditEvent) -> None:
+        if self.error:
+            raise self.error
+        self.events.append(event)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def mock_services(
     sample_weather_observations: list[WeatherObservation],
@@ -221,4 +306,21 @@ def mock_services(
         hazard_service=MockHazardService(sample_hazard_assessment),
         supplier_service=MockSupplierService([(sample_supplier, sample_inventory)]),
         routing_service=MockRoutingService(sample_route_result),
+    )
+
+
+@pytest.fixture
+def mock_audit_service() -> MockAuditService:
+    """Standalone mock audit service fixture."""
+    return MockAuditService()
+
+
+@pytest.fixture
+def sample_dispatch_result() -> DispatchResult:
+    """A successful DispatchResult fixture."""
+    return DispatchResult(
+        dispatch_id="dsp_001",
+        plan_id="plan_test",
+        provider_message_id="tg_msg_001",
+        status="SENT",
     )
