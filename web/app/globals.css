@@ -1,0 +1,94 @@
+@import "tailwindcss";
+@source "../**/*.{js,ts,jsx,tsx}";
+
+/* --------------------------------------------------------------------------
+   ReliefRoute Design System
+   Dark mode emergency logistics aesthetic:
+   - Slate 950 background
+   - Indigo accent (agent/AI actions)
+   - Sky accent (dispatch/comms)
+   - Emerald (success/approved)
+   - Rose/Red (error/rejected/risk)
+   - Amber (warnings/needs action)
+   -------------------------------------------------------------------------- */
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #020617;
+    color: #f1f5f9;
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+
+  /* Custom scrollbar — minimal dark style */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #334155;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #475569;
+  }
+}
+
+@layer utilities {
+  /* MapLibre CSS override — ensure map fills container */
+  .maplibregl-map {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Popup styling override */
+  .maplibregl-popup-content {
+    background: white;
+    color: #0f172a;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    padding: 10px 14px !important;
+  }
+  .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+    border-top-color: white !important;
+  }
+
+  /* animate-in utilities (graceful degradation if not present) */
+  .animate-in {
+    animation-duration: 300ms;
+    animation-fill-mode: both;
+  }
+  .fade-in {
+    animation-name: fadeIn;
+  }
+  .slide-in-from-right-5 {
+    animation-name: slideInFromRight5;
+  }
+  .slide-in-from-bottom-2 {
+    animation-name: slideInFromBottom2;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideInFromRight5 {
+    from { transform: translateX(1.25rem); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideInFromBottom2 {
+    from { transform: translateY(0.5rem); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+}
