@@ -1,8 +1,8 @@
-\"\"\"Public Python interface signatures. Implementations belong to services/ or agent/.
+"""Public Python interface signatures. Implementations belong to services/ or agent/.
 
 Services should raise ReliefRouteError for expected operational failures. Do not return fake
 success values. All times must be timezone-aware. Internal coordinates use named LatLon fields.
-\"\"\"
+"""
 from typing import Protocol
 from shared.models import (
     WeatherObservation, LatLon, HazardAssessment, RouteRequest, RouteResult,
