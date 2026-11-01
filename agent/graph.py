@@ -1,14 +1,4 @@
-"""LangGraph state machine orchestration for ReliefRoute.
-
-Phase 1 pipeline:
-    START -> MONITOR -> ASSESS -> PLAN -> VALIDATE -> [SUCCESS | NEEDS_INFO | FAILURE] -> END
-
-Phase 2 extension:
-    planning_success -> await_approval -> APPROVED?
-        YES -> dispatch -> DISPATCHED? -> verify -> COMPLETED | REPLAN -> replan -> monitor (cycle)
-        NO  -> approval_rejected (REJECTED) | approval_pending (AWAITING_APPROVAL)
-    dispatch failure -> dispatch_failed -> END
-"""
+"""LangGraph state machine orchestration for ReliefRoute."""
 
 from typing import Any
 
@@ -17,106 +7,199 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agent.nodes import (
-    approval_pending_node,
-    assess_node,
-    await_approval_node,
-    completed_node,
-    dispatch_failed_node,
-    dispatch_node,
-    execute_node,
-    monitor_node,
-    needs_info_node,
-    plan_node,
-    planning_failure_node,
-    planning_success_node,
-    rejected_node,
-    replan_node,
-    route_after_approval,
-    route_after_dispatch,
-    route_after_validation,
-    route_after_verify,
-    validate_node,
-    verify_node,
+approval_pending_node,
+assess_node,
+await_approval_node,
+completed_node,
+dispatch_failed_node,
+dispatch_node,
+execute_node,
+extract_report_node,
+monitor_node,
+needs_info_node,
+plan_node,
+planning_failure_node,
+planning_success_node,
+rejected_node,
+replan_node,
+route_after_approval,
+route_after_dispatch,
+route_after_validation,
+route_after_verify,
+validate_node,
+validate_report_node,
 )
 from agent.services import AgentServices
 from agent.state import AgentState
+def route_after_report_validation(state: AgentState) -> str:
+    if state.get("workflow_status") == "FAILED":
+        return "failed"
 
+    validation = state.get("report_validation")
 
-def build_agent_graph(services: AgentServices | None = None) -> StateGraph:
-    """Construct the LangGraph StateGraph for ReliefRoute Phase 1 + 2.
+    if validation is None or not validation.structurally_valid:
+        return "needs_information"
 
-    Args:
-        services: Optional dependency injection container providing external services.
-    """
+    return "monitor"
+
+def route_after_start(state: AgentState) -> str:
+    """Choose the correct starting node based on available input."""
+
+    if state.get("citizen_report") is not None:
+        return "extract_report"
+
+    if state.get("incident") is not None:
+        return "monitor"
+
+    return "needs_information"
+
+def build_agent_graph(
+    services: AgentServices | None = None,
+) -> StateGraph:
+    """Construct the ReliefRoute Phase 1, Phase 2 and AI workflow."""
+
     workflow = StateGraph(AgentState)
 
-    # ------------------------------------------------------------------
-    # Bind node functions with injected services
-    # ------------------------------------------------------------------
-    async def _monitor(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    # --------------------------------------------------
+    # Bind Phase 1 nodes
+    # --------------------------------------------------
+
+    async def _monitor(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
         return await monitor_node(state, config, services=services)
 
-    async def _assess(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    async def _assess(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
         return await assess_node(state, config, services=services)
 
-    async def _plan(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    async def _plan(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
         return await plan_node(state, config, services=services)
 
-    def _validate(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    def _validate(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
         return validate_node(state, config)
 
-    # Phase 2 bound nodes
-    async def _await_approval(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-        return await await_approval_node(state, config, services=services)
+    # --------------------------------------------------
+    # Bind Phase 2 nodes
+    # --------------------------------------------------
 
-    async def _dispatch(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-        return await dispatch_node(state, config, services=services)
+    async def _await_approval(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        return await await_approval_node(
+            state, config, services=services
+        )
 
-    async def _verify(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-        return await verify_node(state, config, services=services)
+    async def _dispatch(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        return await dispatch_node(
+            state, config, services=services
+        )
 
-    async def _replan(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-        return await replan_node(state, config, services=services)
+    async def _verify(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        return await verify_node(
+            state, config, services=services
+        )
 
-    # ------------------------------------------------------------------
-    # Register Phase 1 pipeline nodes
-    # ------------------------------------------------------------------
+    async def _replan(
+        state: AgentState,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        return await replan_node(
+            state, config, services=services
+        )
+
+    # --------------------------------------------------
+    # Register AI report nodes
+    # --------------------------------------------------
+
+    workflow.add_node("extract_report", extract_report_node)
+    workflow.add_node("validate_report", validate_report_node)
+
+    # --------------------------------------------------
+    # Register Phase 1 nodes
+    # --------------------------------------------------
+
     workflow.add_node("monitor", _monitor)
     workflow.add_node("assess", _assess)
     workflow.add_node("plan", _plan)
     workflow.add_node("validate", _validate)
 
-    # Terminal decision outcome nodes (Phase 1)
     workflow.add_node("planning_success", planning_success_node)
     workflow.add_node("needs_information", needs_info_node)
     workflow.add_node("planning_failure", planning_failure_node)
 
-    # ------------------------------------------------------------------
+    # --------------------------------------------------
     # Register Phase 2 nodes
-    # ------------------------------------------------------------------
+    # --------------------------------------------------
+
     workflow.add_node("await_approval", _await_approval)
     workflow.add_node("dispatch", _dispatch)
     workflow.add_node("verify", _verify)
     workflow.add_node("replan", _replan)
 
-    # Phase 2 terminal nodes
     workflow.add_node("approval_pending", approval_pending_node)
     workflow.add_node("approval_rejected", rejected_node)
     workflow.add_node("dispatch_failed", dispatch_failed_node)
     workflow.add_node("completed", completed_node)
 
-    # Legacy Phase 1 stub node (kept for backward-compatibility)
+    # Legacy execute node
     workflow.add_node("execute", execute_node)
 
-    # ------------------------------------------------------------------
-    # Phase 1 primary edges: START -> MONITOR -> ASSESS -> PLAN -> VALIDATE
-    # ------------------------------------------------------------------
-    workflow.add_edge(START, "monitor")
+    # --------------------------------------------------
+    # Initial input routing
+    # --------------------------------------------------
+
+    workflow.add_conditional_edges(
+        START,
+        route_after_start,
+        {
+            "extract_report": "extract_report",
+            "monitor": "monitor",
+            "needs_information": "needs_information",
+            "planning_failure": "planning_failure",
+        },
+    )
+
+    # --------------------------------------------------
+    # AI extraction and validation
+    # --------------------------------------------------
+
+    workflow.add_edge("extract_report", "validate_report")
+
+    workflow.add_conditional_edges(
+        "validate_report",
+        route_after_report_validation,
+        {
+            "monitor": "monitor",
+            "needs_information": "needs_information",
+            "failed": "planning_failure",
+        },
+    )
+
+    # --------------------------------------------------
+    # Phase 1: Monitor -> Assess -> Plan -> Validate
+    # --------------------------------------------------
+
     workflow.add_edge("monitor", "assess")
     workflow.add_edge("assess", "plan")
     workflow.add_edge("plan", "validate")
 
-    # Conditional branching following deterministic validation
     workflow.add_conditional_edges(
         "validate",
         route_after_validation,
@@ -127,13 +210,13 @@ def build_agent_graph(services: AgentServices | None = None) -> StateGraph:
         },
     )
 
-    # Phase 1 terminal edges
     workflow.add_edge("needs_information", END)
     workflow.add_edge("planning_failure", END)
 
-    # ------------------------------------------------------------------
-    # Phase 2: planning_success -> await_approval -> dispatch -> verify
-    # ------------------------------------------------------------------
+    # --------------------------------------------------
+    # Phase 2: Human approval
+    # --------------------------------------------------
+
     workflow.add_edge("planning_success", "await_approval")
 
     workflow.add_conditional_edges(
@@ -147,11 +230,13 @@ def build_agent_graph(services: AgentServices | None = None) -> StateGraph:
         },
     )
 
-    # Approval terminal nodes
     workflow.add_edge("approval_pending", END)
     workflow.add_edge("approval_rejected", END)
 
-    # Dispatch routing
+    # --------------------------------------------------
+    # Phase 2: Dispatch
+    # --------------------------------------------------
+
     workflow.add_conditional_edges(
         "dispatch",
         route_after_dispatch,
@@ -163,7 +248,10 @@ def build_agent_graph(services: AgentServices | None = None) -> StateGraph:
 
     workflow.add_edge("dispatch_failed", END)
 
-    # Verify / replan routing
+    # --------------------------------------------------
+    # Phase 2: Verification and replanning
+    # --------------------------------------------------
+
     workflow.add_conditional_edges(
         "verify",
         route_after_verify,
@@ -175,17 +263,18 @@ def build_agent_graph(services: AgentServices | None = None) -> StateGraph:
     )
 
     workflow.add_edge("completed", END)
-
-    # Replan loops back to monitor for a fresh planning cycle
     workflow.add_edge("replan", "monitor")
 
-    # Legacy execute stub
+    # Legacy execute node
     workflow.add_edge("execute", END)
 
     return workflow
 
+def create_agent_workflow(
+    services: AgentServices | None = None,
+    ) -> CompiledStateGraph:
+        """Build and compile the ReliefRoute workflow."""
 
-def create_agent_workflow(services: AgentServices | None = None) -> CompiledStateGraph:
-    """Build and compile the LangGraph workflow ready for invocation."""
-    graph = build_agent_graph(services)
-    return graph.compile()
+        graph = build_agent_graph(services)
+        return graph.compile()
+

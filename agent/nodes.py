@@ -23,13 +23,14 @@ from agent.state import (
     ValidationResult,
     WorkflowStatus,
 )
-from shared.enums import ErrorCode, PlanStatus
+from shared.enums import ErrorCode, PlanStatus,ExtractionStatus
 from shared.errors import ReliefRouteError
 from shared.models import (
     AuditEvent,
     DispatchRequest,
     RouteRequest,
     utc_now,
+    ReportExtractionMetadata
 )
 
 
@@ -606,11 +607,18 @@ def planning_success_node(state: AgentState) -> dict[str, Any]:
 
 def needs_info_node(state: AgentState) -> dict[str, Any]:
     """Terminal state when essential information is missing."""
+
+    missing_info = list(state.get("missing_info", []))
+
+    # Check whether the workflow has received any initial input.
+    if state.get("incident") is None and state.get("citizen_report") is None:
+        missing_info.append("incident or citizen_report")
+
     return {
         "workflow_status": WorkflowStatus.NEEDS_INFO,
+        "missing_info": missing_info,
         "updated_at": utc_now().isoformat(),
     }
-
 
 def planning_failure_node(state: AgentState) -> dict[str, Any]:
     """Terminal state when planning fails or is blocked by guardrails."""
@@ -1226,5 +1234,77 @@ def completed_node(state: AgentState) -> dict[str, Any]:
     """Terminal state for a successfully completed delivery."""
     return {
         "workflow_status": WorkflowStatus.COMPLETED,
+        "updated_at": utc_now().isoformat(),
+    }
+async def extract_report_node(state: AgentState) -> dict:
+    """Extract structured emergency information from a citizen report."""
+
+    report = state.get("citizen_report")
+
+    if report is None:
+        return {
+            "workflow_status": WorkflowStatus.NEEDS_INFO,
+            "errors": state.get("errors", []) + [
+                "Citizen report is missing."
+            ],
+        }
+
+    try:
+        extracted = await extract_emergency_report(report)
+
+        metadata = ReportExtractionMetadata(
+            report_id=report.report_id,
+            provider="Groq",
+            model=settings.groq_model,
+            status=ExtractionStatus.SUCCEEDED,
+        )
+
+        return {
+            "extracted_report": extracted,
+            "extraction_metadata": metadata,
+            "updated_at": utc_now().isoformat(),
+        }
+
+    except Exception as error:
+        metadata = ReportExtractionMetadata(
+            report_id=report.report_id,
+            provider="Groq",
+            model=settings.groq_model,
+            status=ExtractionStatus.FAILED,
+            errors=[str(error)],
+        )
+
+        return {
+            "extraction_metadata": metadata,
+            "workflow_status": WorkflowStatus.FAILED,
+            "errors": state.get("errors", []) + [
+                "Emergency report extraction failed."
+            ],
+        }
+
+
+def validate_report_node(state: AgentState) -> dict:
+    """Validate extracted emergency information."""
+
+    extracted = state.get("extracted_report")
+
+    if extracted is None:
+        return {
+            "workflow_status": WorkflowStatus.NEEDS_INFO,
+            "errors": state.get("errors", []) + [
+                "No extracted emergency report is available."
+            ],
+        }
+
+    validation = validate_emergency_report(extracted)
+
+    return {
+        "report_validation": validation,
+        "missing_info": validation.clarification_fields,
+        "workflow_status": (
+            WorkflowStatus.NEEDS_INFO
+            if not validation.structurally_valid
+            else WorkflowStatus.MONITORED
+        ),
         "updated_at": utc_now().isoformat(),
     }

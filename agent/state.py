@@ -18,6 +18,10 @@ from shared.models import (
     Supplier,
     WeatherObservation,
     utc_now,
+    CitizenReport,
+    ExtractedEmergencyReport,
+    ReportExtractionMetadata,
+    ReportValidationResult, 
 )
 
 
@@ -127,6 +131,11 @@ class AgentState(TypedDict, total=False):
     audit_events: list[dict[str, Any]]           # Serialised AuditEvent records
     created_at: str
     updated_at: str
+        # AI-powered citizen report processing
+    citizen_report: CitizenReport | None
+    extracted_report: ExtractedEmergencyReport | None
+    extraction_metadata: ReportExtractionMetadata | None
+    report_validation: ReportValidationResult | None
 
 
 def create_initial_state(
@@ -172,4 +181,8 @@ def create_initial_state(
         "audit_events": [],
         "created_at": now_iso,
         "updated_at": now_iso,
+                "citizen_report": None,
+        "extracted_report": None,
+        "extraction_metadata": None,
+        "report_validation": None,
     }

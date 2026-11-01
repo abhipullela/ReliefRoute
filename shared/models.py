@@ -1,7 +1,13 @@
 from datetime import datetime, timezone
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from shared.enums import PlanStatus, RiskLevel
+from shared.enums import (
+    EmergencyUrgency,
+    ExtractionStatus,
+    PlanStatus,
+    RiskLevel,
+    VerificationStatus,
+)
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -158,3 +164,78 @@ class AuditEvent(ContractModel):
     outcome: str
     details: dict[str, Any] = Field(default_factory=dict)
     source_refs: list[SourceRef] = Field(default_factory=list)
+
+class CitizenReport(ContractModel):
+    report_id: str
+    channel: str = "telegram"
+    sender_handle: str | None = None
+    raw_text: str
+    raw_location_text: str | None = None
+    provided_location: LatLon | None = None
+    reported_at: datetime = Field(default_factory=utc_now)
+
+class ExtractedEmergency(ContractModel):
+    raw_report_id: str
+    commodity: str
+    estimated_quantity: float | None = None
+    quantity_unspecified: bool = False
+    unit: str | None = None
+    location_text: str
+    resolved_destination: LatLon | None = None
+    urgency: EmergencyUrgency = EmergencyUrgency.UNKNOWN
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    missing_fields: list[str] = Field(default_factory=list)
+    verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
+    extraction_notes: list[str] = Field(default_factory=list)
+class ExtractedNeed(ContractModel):
+    commodity: str
+
+    quantity: float | None = Field(default=None, gt=0)
+
+    unit: str | None = None
+
+    evidence: list[str] = Field(default_factory=list)
+class ExtractedEmergencyReport(ContractModel):
+    report_id: str
+
+    incident_type: str | None = None
+
+    location_description: str | None = None
+
+    coordinates: LatLon | None = None
+
+    people_affected: int | None = Field(default=None, ge=0)
+
+    needs: list[ExtractedNeed] = Field(default_factory=list)
+
+    reported_conditions: list[str] = Field(default_factory=list)
+
+    reported_urgency: EmergencyUrgency = EmergencyUrgency.UNKNOWN
+
+    missing_information: list[str] = Field(default_factory=list)
+
+    extraction_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    extracted_at: datetime = Field(default_factory=utc_now)
+class ReportExtractionMetadata(ContractModel):
+    report_id: str
+
+    provider: str
+
+    model: str
+
+    status: ExtractionStatus = ExtractionStatus.PENDING
+
+    extracted_at: datetime = Field(default_factory=utc_now)
+
+    errors: list[str] = Field(default_factory=list)
+class ReportValidationResult(ContractModel):
+    report_id: str
+
+    structurally_valid: bool
+
+    validation_issues: list[str] = Field(default_factory=list)
+
+    clarification_fields: list[str] = Field(default_factory=list)
