@@ -206,6 +206,7 @@ class ExtractedEmergencyReport(ContractModel):
 
     people_affected: int | None = Field(default=None, ge=0)
 
+    affected_households: int | None = Field(default=None, ge=0)
     needs: list[ExtractedNeed] = Field(default_factory=list)
 
     reported_conditions: list[str] = Field(default_factory=list)
@@ -219,6 +220,7 @@ class ExtractedEmergencyReport(ContractModel):
     verification_status: VerificationStatus = VerificationStatus.PENDING
 
     extracted_at: datetime = Field(default_factory=utc_now)
+
 class ReportExtractionMetadata(ContractModel):
     report_id: str
 

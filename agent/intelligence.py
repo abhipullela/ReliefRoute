@@ -58,12 +58,20 @@ async def extract_emergency_report(
     1. Never invent information, quantities, locations, or coordinates.
     2. Extract only information explicitly stated or clearly supported.
     3. Do not convert families into people.
-    4. If quantity is unknown, use null.
-    5. Coordinates must remain null unless explicitly provided.
-    6. Urgency represents what the citizen reports, not verified severity.
-    7. Verification status must always be PENDING.
-    8. List missing information that would help responders.
-    9. reported_urgency MUST be exactly one of:
+    4. If the report explicitly mentions a number of families or households,
+   extract that number into affected_households.
+
+    5. If the report mentions families but not individual people,
+   keep people_affected as null.
+
+    6. Do not use the number of affected households as the quantity
+   of drinking water, food, or any other commodity.
+    7. If quantity is unknown, use null.
+    8. Coordinates must remain null unless explicitly provided.
+    9. Urgency represents what the citizen reports, not verified severity.
+    10. Verification status must always be PENDING.
+    11. List missing information that would help responders.
+    12. reported_urgency MUST be exactly one of:
    CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN.
    Never use words like URGENT or EMERGENCY.
 
@@ -73,6 +81,7 @@ async def extract_emergency_report(
         "location_description": null,
         "coordinates": null,
         "people_affected": null,
+        "affected_households": null,
         "needs": [],
         "reported_conditions": [],
         "reported_urgency": "UNKNOWN",

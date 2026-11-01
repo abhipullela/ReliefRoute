@@ -141,6 +141,7 @@ class AgentState(TypedDict, total=False):
 def create_initial_state(
     incident: IncidentInfo | dict[str, Any] | None = None,
     location: LatLon | dict[str, Any] | None = None,
+    citizen_report: CitizenReport | None = None,
 ) -> AgentState:
     """Initialize an AgentState dictionary with valid defaults and timestamps."""
     resolved_incident: IncidentInfo | None = None
@@ -181,7 +182,7 @@ def create_initial_state(
         "audit_events": [],
         "created_at": now_iso,
         "updated_at": now_iso,
-                "citizen_report": None,
+        "citizen_report": citizen_report,
         "extracted_report": None,
         "extraction_metadata": None,
         "report_validation": None,
