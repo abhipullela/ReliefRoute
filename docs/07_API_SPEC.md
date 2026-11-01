@@ -15,6 +15,10 @@ Prefix: `/api/v1`. JSON request/response bodies use the canonical Pydantic model
 - `POST /api/v1/plans/{plan_id}/dispatch` — `DispatchRequest`; only approved plans can dispatch.
 - `POST /api/v1/plans/{plan_id}/acknowledgements` — `DriverAcknowledgement`.
 - `GET /api/v1/audit-events?entity_id={id}` — events for an entity/plan.
+- `POST /citizen-reports` — persist a citizen report and run consent-gated AI triage.
+- `GET /citizen-reports` — paginated report listing with optional triage status filter.
+- `GET /citizen-reports/{report_id}` — retrieve one report.
+- `POST /citizen-reports/{report_id}/triage` — retry pending/unavailable/failed AI triage.
 
 ## HTTP status semantics
 - `200`: successful read/update.
@@ -32,3 +36,7 @@ Prefix: `/api/v1`. JSON request/response bodies use the canonical Pydantic model
 
 ## Required response behavior
 Every response that depends on external data should expose source, retrieval/observation time, and stale/warning information. Error responses should have stable `code`, safe `message`, `retryable`, and `correlation_id` fields. Do not return stack traces or credentials.
+
+Citizen-report request/response fields, enum values, idempotency, AI consent,
+and triage states are defined in `docs/13_CITIZEN_REPORTS_API.md`. Note: the
+current API routes are not mounted under the `/api/v1` prefix mentioned above.

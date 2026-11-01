@@ -26,6 +26,11 @@ Shared contracts may be imported by all Python components. `agent/` must not imp
 9. Driver acknowledgement is a distinct event from message sent.
 10. Verify stage checks freshness, acknowledgement and ETA drift; replan within bounded retry count.
 
+Citizen reports enter through the API, are stored in `citizen_reports`, and are
+processed by `agent/citizen_reports.py`. The agent invokes the OpenAI-compatible
+GenAI adapter in `services/genai.py` only after per-report consent. The
+classification remains advisory and requires a human to review it.
+
 ## No false guarantees
 - Weather polygon = modeled/forecast risk area, not verified road closure.
 - Route avoids polygon = provider-calculated geometry, not proof of safety.

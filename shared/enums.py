@@ -1,16 +1,44 @@
 from enum import StrEnum
 
+
 class RiskLevel(StrEnum):
     LOW = "LOW"
     MODERATE = "MODERATE"
     HIGH = "HIGH"
     UNKNOWN = "UNKNOWN"
 
+
+class CitizenReportCategory(StrEnum):
+    FLOODING = "FLOODING"
+    ROAD_BLOCKAGE = "ROAD_BLOCKAGE"
+    INFRASTRUCTURE_DAMAGE = "INFRASTRUCTURE_DAMAGE"
+    MEDICAL_EMERGENCY = "MEDICAL_EMERGENCY"
+    SUPPLY_NEED = "SUPPLY_NEED"
+    OTHER = "OTHER"
+
+
+class ReportSeverity(StrEnum):
+    INFORMATIONAL = "INFORMATIONAL"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ReportTriageStatus(StrEnum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETE = "COMPLETE"
+    NOT_REQUESTED = "NOT_REQUESTED"
+    UNAVAILABLE = "UNAVAILABLE"
+    FAILED = "FAILED"
+
+
 class PlanStatus(StrEnum):
     DRAFT = "DRAFT"
     NEEDS_APPROVAL = "NEEDS_APPROVAL"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    DISPATCHING = "DISPATCHING"
     DISPATCHED = "DISPATCHED"
     ACKNOWLEDGED = "ACKNOWLEDGED"
     IN_TRANSIT = "IN_TRANSIT"
@@ -30,3 +58,20 @@ class ErrorCode(StrEnum):
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
     CONFLICT = "CONFLICT"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+
+class EmergencyUrgency(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    UNKNOWN = "UNKNOWN"
+
+class VerificationStatus(StrEnum):
+    PENDING="PENDING"
+    UNVERIFIED = "UNVERIFIED"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+class ExtractionStatus(StrEnum):
+    PENDING = "PENDING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
