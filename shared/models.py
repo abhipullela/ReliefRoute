@@ -1,10 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from shared.enums import PlanStatus, RiskLevel
 
+
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 class ContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -130,6 +133,7 @@ class ApprovalRequest(ContractModel):
 class DispatchRequest(ContractModel):
     plan_id: str
     driver_id: str
+    telegram_chat_id: str | None = Field(default=None, min_length=1)
     message: str
     idempotency_key: str
 

@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS dispatches (
   payload JSONB NOT NULL,
   attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS dispatches_plan_driver_sent_idx
+  ON dispatches (plan_id, (payload -> 'request' ->> 'driver_id'), attempted_at DESC)
+  WHERE status = 'SENT';
 CREATE TABLE IF NOT EXISTS audit_events (
   event_id TEXT PRIMARY KEY,
   occurred_at TIMESTAMPTZ NOT NULL,

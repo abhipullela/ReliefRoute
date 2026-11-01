@@ -168,3 +168,50 @@ class PostgreSQLPlanningStore:
                 provider="postgresql",
                 details={"error_type": type(exc).__name__},
             ) from exc
+
+    async def transition_status(
+        self,
+        plan_id: str,
+        status: PlanStatus,
+        *,
+        expected_statuses: tuple[PlanStatus, ...],
+    ) -> DeliveryPlan | None:
+        """Atomically transition a plan only when it is in an expected state."""
+
+        try:
+            async with await psycopg.AsyncConnection.connect(
+                self.database_url,
+                row_factory=dict_row,
+                connect_timeout=5,
+            ) as connection:
+                cursor = await connection.execute(
+                    """
+                    UPDATE plans
+                    SET status = %s,
+                        payload = jsonb_set(
+                            payload, '{status}', to_jsonb(%s::text)
+                        ),
+                        updated_at = NOW()
+                    WHERE plan_id = %s
+                      AND status = ANY(%s)
+                    RETURNING payload
+                    """,
+                    (
+                        status.value,
+                        status.value,
+                        plan_id,
+                        [value.value for value in expected_statuses],
+                    ),
+                )
+                row = await cursor.fetchone()
+
+            return DeliveryPlan.model_validate(row["payload"]) if row else None
+
+        except psycopg.Error as exc:
+            raise ReliefRouteError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                "Could not transition the delivery plan status.",
+                retryable=True,
+                provider="postgresql",
+                details={"error_type": type(exc).__name__},
+            ) from exc

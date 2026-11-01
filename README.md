@@ -76,3 +76,26 @@ A successful run demonstrates that:
 3. The resulting observations use the project's shared data models.
 
 This check verifies the weather integration only. It does not establish that hazard assessment, routing, dispatch, or the complete delivery workflow is operational.
+
+## Approval, Telegram Dispatch, and Acknowledgement
+
+The API persists approval and dispatch state in PostgreSQL. Approval decisions use
+conditional status transitions so concurrent reviewers cannot overwrite one
+another. A dispatch is reserved before contacting Telegram; replaying the same
+idempotency key returns its prior confirmed result or refuses to send again.
+
+`services/notifications.py` implements the Telegram Bot API provider. It requires
+`TELEGRAM_BOT_TOKEN` and an explicit Telegram chat ID; the driver must have started
+a conversation with the bot. The existing API still uses its unconfigured sender,
+so adding the token alone does not enable Telegram delivery through the API. A
+`SENT` result is returned only after Telegram confirms a message ID. A definite
+provider rejection records `FAILED` and restores the plan to `APPROVED`, so an
+operator can retry with a new idempotency key. A timeout or malformed provider
+response leaves the attempt unresolved (`SENDING` / plan `DISPATCHING`); it must
+be reconciled with Telegram before another message is sent, because delivery may
+have occurred despite the missing response.
+
+Drivers can acknowledge a confirmed dispatch through
+`POST /plans/{plan_id}/acknowledgement`. Only the dispatched driver can
+acknowledge; identical retries are idempotent, and a positive acknowledgement
+does not move an `IN_TRANSIT` plan backwards.

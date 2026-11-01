@@ -11,6 +11,10 @@
 - `dispatches`: dispatch attempts, unique idempotency key, provider message ID.
 - `audit_events`: append-only record of important actions and outcomes.
 
+Apply SQL changes through the ordered, checksum-verified files in `db/migrations/`;
+never edit a migration after it has been applied. Migration `002` adds the index
+used to resolve a driver's confirmed dispatch for acknowledgement.
+
 ## Data freshness
 - Weather: record retrieval time and forecast window; warn if older than `WEATHER_MAX_AGE_MINUTES`.
 - Driver GPS: reject or mark stale if older than `DRIVER_LOCATION_MAX_AGE_MINUTES`.

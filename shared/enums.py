@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+
 class RiskLevel(StrEnum):
     LOW = "LOW"
     MODERATE = "MODERATE"
@@ -11,6 +12,7 @@ class PlanStatus(StrEnum):
     NEEDS_APPROVAL = "NEEDS_APPROVAL"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    DISPATCHING = "DISPATCHING"
     DISPATCHED = "DISPATCHED"
     ACKNOWLEDGED = "ACKNOWLEDGED"
     IN_TRANSIT = "IN_TRANSIT"
