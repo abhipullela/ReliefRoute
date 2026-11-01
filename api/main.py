@@ -1,57 +1,79 @@
-"""ReliefRoute API: supplier, inventory, telemetry and plan endpoints."""
+"""ReliefRoute API: supplier, inventory, telemetry, plans, approval and dispatch."""
 
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any
 
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from datetime import datetime
-
+from services.approval_workflow import ApprovalDispatchWorkflow
+from services.audit import PostgreSQLAuditService
+from services.dispatch import PostgreSQLDispatchService
 from services.plans import PostgreSQLPlanningStore
 from services.suppliers import PostgreSQLSupplierService
 from services.telemetry import PostgreSQLTelemetryService
+from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import (
+    ApprovalRequest,
     DeliveryPlan,
+    DispatchRequest,
+    DispatchResult,
+    DriverAcknowledgement,
     DriverLocation,
     InventoryItem,
     LatLon,
     Supplier,
+    utc_now,
 )
+from shared.models import ContractModel
 
 load_dotenv()
+
+
+async def _unconfigured_notification_sender(_request: DispatchRequest) -> dict[str, Any]:
+    """Fail honestly until a real notification provider is configured."""
+    raise ReliefRouteError(
+        ErrorCode.UPSTREAM_UNAVAILABLE,
+        "Dispatch notification provider is not configured.",
+        provider="notification",
+        details={"required_configuration": "notification sender"},
+    )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create service objects once per application process."""
     database_url = os.getenv("DATABASE_URL")
-
     app.state.database_url = database_url
-    app.state.suppliers = (
-        PostgreSQLSupplierService(database_url) if database_url else None
+    app.state.suppliers = PostgreSQLSupplierService(database_url) if database_url else None
+    app.state.telemetry = PostgreSQLTelemetryService(database_url) if database_url else None
+    app.state.plans = PostgreSQLPlanningStore(database_url) if database_url else None
+    app.state.dispatches = PostgreSQLDispatchService(database_url) if database_url else None
+    app.state.audit = PostgreSQLAuditService(database_url) if database_url else None
+    app.state.approval_workflow = (
+        ApprovalDispatchWorkflow(
+            plans=app.state.plans,
+            dispatches=app.state.dispatches,
+            audit=app.state.audit,
+        )
+        if database_url
+        else None
     )
-    app.state.telemetry = (
-        PostgreSQLTelemetryService(database_url) if database_url else None
-    )
-    app.state.plans = (
-        PostgreSQLPlanningStore(database_url) if database_url else None
-    )
-
+    # Replace this callable with a real provider implementation when available.
+    # Keeping it injectable also makes provider behavior testable.
+    app.state.notification_sender = _unconfigured_notification_sender
     yield
 
 
-app = FastAPI(
-    title="ReliefRoute API",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+app = FastAPI(title="ReliefRoute API", version="0.2.0", lifespan=lifespan)
 
 
-class InventorySubmission(BaseModel):
+class InventorySubmission(ContractModel):
     """Supplier-reported inventory; never inferred from mandi arrivals."""
 
     supplier_id: str = Field(min_length=1)
@@ -63,7 +85,7 @@ class InventorySubmission(BaseModel):
     source: str = "supplier_reported"
 
 
-class SupplierRegistration(BaseModel):
+class SupplierRegistration(ContractModel):
     supplier_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     location: LatLon
@@ -71,6 +93,26 @@ class SupplierRegistration(BaseModel):
     contact_handle: str = Field(min_length=1)
     verified_at: datetime | None = None
     active: bool = True
+
+
+class ApprovalDecisionBody(ContractModel):
+    approved: bool
+    approver_id: str = Field(min_length=1)
+    comment: str | None = None
+    decided_at: datetime = Field(default_factory=utc_now)
+
+
+class DispatchBody(ContractModel):
+    driver_id: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    idempotency_key: str = Field(min_length=1)
+
+
+class AcknowledgementBody(ContractModel):
+    driver_id: str = Field(min_length=1)
+    acknowledged: bool
+    received_at: datetime = Field(default_factory=utc_now)
+    message: str | None = None
 
 
 def _service_or_503(service, name: str):
@@ -84,8 +126,6 @@ def _service_or_503(service, name: str):
 
 def _raise_http_error(exc: ReliefRouteError) -> None:
     """Translate typed domain errors to appropriate HTTP status codes."""
-    from shared.enums import ErrorCode
-
     status_map = {
         ErrorCode.VALIDATION_ERROR: 422,
         ErrorCode.NOT_FOUND: 404,
@@ -98,77 +138,27 @@ def _raise_http_error(exc: ReliefRouteError) -> None:
         ErrorCode.INVALID_UPSTREAM_RESPONSE: 502,
         ErrorCode.DATA_STALE: 503,
     }
-    code = exc.error.code
-    status_code = status_map.get(code, 500)
     raise HTTPException(
-        status_code=status_code,
+        status_code=status_map.get(exc.error.code, 500),
         detail=exc.error.model_dump(mode="json"),
     ) from exc
 
 
-# @app.get("/health")
-# async def health() -> dict:
-#     """Check API process and database readiness."""
-#     database_url = app.state.database_url
-
-#     if not database_url:
-#         raise HTTPException(
-#             status_code=503,
-#             detail={
-#                 "status": "unavailable",
-#                 "service": "reliefroute-api",
-#                 "database": "not_configured",
-#             },
-#         )
-
-#     try:
-#         async with await psycopg.AsyncConnection.connect(
-#             database_url,
-#             connect_timeout=3,
-#         ) as connection:
-#             await connection.execute("SELECT 1")
-#     except psycopg.Error as exc:
-#         raise HTTPException(
-#             status_code=503,
-#             detail={
-#                 "status": "unavailable",
-#                 "service": "reliefroute-api",
-#                 "database": "unavailable",
-#                 "error_type": type(exc).__name__,
-#             },
-#         ) from exc
-
-#     return {
-#         "status": "ok",
-#         "service": "reliefroute-api",
-#         "database": "connected",
-#     }
-
 @app.get("/health")
 async def health():
     database_url = getattr(app.state, "database_url", None)
-
     if not database_url:
-        return {
-            "status": "error",
-            "database": "not_configured",
-        }
-
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "error", "database": "not_configured"},
+        )
     try:
         async with await psycopg.AsyncConnection.connect(
-            database_url,
-            connect_timeout=10,
+            database_url, connect_timeout=10
         ) as conn:
             await conn.execute("SELECT 1")
-
-        return {
-            "status": "ok",
-            "service": "reliefroute-api",
-            "database": "connected",
-        }
-
+        return {"status": "ok", "service": "reliefroute-api", "database": "connected"}
     except Exception as exc:
-        print(f"Health check failed: {type(exc).__name__}: {exc}")
         raise HTTPException(
             status_code=503,
             detail={
@@ -176,14 +166,14 @@ async def health():
                 "database": "unavailable",
                 "reason": type(exc).__name__,
             },
-        )
+        ) from exc
+
 
 @app.post("/suppliers", response_model=Supplier)
 async def register_supplier(body: SupplierRegistration):
     service = _service_or_503(app.state.suppliers, "Supplier service")
     try:
-        supplier = Supplier.model_validate(body.model_dump())
-        return await service.register_supplier(supplier)
+        return await service.register_supplier(Supplier.model_validate(body.model_dump()))
     except ReliefRouteError as exc:
         _raise_http_error(exc)
 
@@ -192,27 +182,17 @@ async def register_supplier(body: SupplierRegistration):
 async def upsert_inventory(body: InventorySubmission):
     service = _service_or_503(app.state.suppliers, "Supplier service")
     try:
-        item = InventoryItem.model_validate(body.model_dump())
-        return await service.upsert_inventory(item)
+        return await service.upsert_inventory(InventoryItem.model_validate(body.model_dump()))
     except ReliefRouteError as exc:
         _raise_http_error(exc)
 
 
 @app.get("/inventory/{commodity}")
-async def list_inventory(
-    commodity: str,
-    min_quantity: float = Query(default=0, ge=0),
-):
+async def list_inventory(commodity: str, min_quantity: float = Query(default=0, ge=0)):
     service = _service_or_503(app.state.suppliers, "Supplier service")
     try:
-        rows = await service.list_available(
-            commodity,
-            min_quantity=min_quantity,
-        )
-        return [
-            {"supplier": supplier, "inventory": inventory}
-            for supplier, inventory in rows
-        ]
+        rows = await service.list_available(commodity, min_quantity=min_quantity)
+        return [{"supplier": supplier, "inventory": inventory} for supplier, inventory in rows]
     except ReliefRouteError as exc:
         _raise_http_error(exc)
 
@@ -220,13 +200,8 @@ async def list_inventory(
 @app.post("/drivers/{driver_id}/location", response_model=DriverLocation)
 async def record_driver_location(driver_id: str, body: DriverLocation):
     service = _service_or_503(app.state.telemetry, "Telemetry service")
-
     if driver_id != body.driver_id:
-        raise HTTPException(
-            status_code=422,
-            detail="Path driver_id must match body driver_id.",
-        )
-
+        raise HTTPException(status_code=422, detail="Path driver_id must match body driver_id.")
     try:
         return await service.record_location(body)
     except ReliefRouteError as exc:
@@ -239,10 +214,7 @@ async def latest_driver_location(driver_id: str):
     try:
         location = await service.latest_location(driver_id)
         if location is None:
-            raise HTTPException(
-                status_code=404,
-                detail="No location is available for this driver.",
-            )
+            raise HTTPException(status_code=404, detail="No location is available for this driver.")
         return location
     except ReliefRouteError as exc:
         _raise_http_error(exc)
@@ -256,5 +228,38 @@ async def get_plan(plan_id: str):
         if plan is None:
             raise HTTPException(status_code=404, detail="Plan not found.")
         return plan
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.post("/plans/{plan_id}/approval", response_model=DeliveryPlan)
+async def decide_plan(plan_id: str, body: ApprovalDecisionBody):
+    workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
+    request = ApprovalRequest(plan_id=plan_id, **body.model_dump())
+    try:
+        return await workflow.decide(request)
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.post("/plans/{plan_id}/dispatch", response_model=DispatchResult)
+async def dispatch_plan(plan_id: str, body: DispatchBody):
+    workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
+    request = DispatchRequest(plan_id=plan_id, **body.model_dump())
+    sender = getattr(app.state, "notification_sender", None)
+    if not callable(sender):
+        sender = _unconfigured_notification_sender
+    try:
+        return await workflow.dispatch(request, sender=sender)
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.post("/plans/{plan_id}/acknowledgement", response_model=DriverAcknowledgement)
+async def acknowledge_dispatch(plan_id: str, body: AcknowledgementBody):
+    workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
+    request = DriverAcknowledgement(plan_id=plan_id, **body.model_dump())
+    try:
+        return await workflow.acknowledge(request)
     except ReliefRouteError as exc:
         _raise_http_error(exc)
