@@ -58,3 +58,20 @@ class ErrorCode(StrEnum):
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
     CONFLICT = "CONFLICT"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+
+class EmergencyUrgency(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    UNKNOWN = "UNKNOWN"
+
+class VerificationStatus(StrEnum):
+    PENDING="PENDING"
+    UNVERIFIED = "UNVERIFIED"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+class ExtractionStatus(StrEnum):
+    PENDING = "PENDING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
