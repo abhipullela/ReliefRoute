@@ -23,6 +23,16 @@ Possible branches:
 - `verify`: distinguish sent, acknowledged, in-transit, and completed.
 - `replan`: refresh data and compute a new plan; preserve previous plan and audit history.
 
+## Citizen-report triage
+`SUBMITTED -> STORED -> (CONSENTED ? TRIAGING : NOT_REQUESTED) -> COMPLETE | UNAVAILABLE | FAILED`
+
+- Store the original citizen report before calling a model.
+- Run triage only when the submission explicitly includes AI-processing consent.
+- Use a database claim token to prevent concurrent workers from replacing a newer result.
+- Preserve the original report unchanged; model output is an advisory category, severity and summary.
+- Every result requires human review. Citizen-report triage cannot approve plans, verify hazards, or dispatch aid.
+- `UNAVAILABLE` and `FAILED` reports remain retriable without resubmitting the report.
+
 ## LLM boundary
 LLM may summarize sources, explain trade-offs, or rank already validated candidates. It must not invent stock, coordinates, closures, acknowledgements, approvals, or API results. Deterministic code enforces all state transitions and authorization.
 

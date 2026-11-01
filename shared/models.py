@@ -3,7 +3,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from shared.enums import PlanStatus, RiskLevel
+from shared.enums import (
+    CitizenReportCategory,
+    PlanStatus,
+    ReportSeverity,
+    ReportTriageStatus,
+    RiskLevel,
+)
 
 
 def utc_now() -> datetime:
@@ -151,6 +157,42 @@ class DriverAcknowledgement(ContractModel):
     acknowledged: bool
     received_at: datetime = Field(default_factory=utc_now)
     message: str | None = None
+
+
+class CitizenReportSubmission(ContractModel):
+    """Citizen-provided incident information; AI fields are not user assertions."""
+
+    report_text: str = Field(min_length=10, max_length=5000)
+    location: LatLon | None = None
+    observed_at: datetime | None = None
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    ai_processing_consent: bool = False
+
+
+class CitizenReportTriage(ContractModel):
+    category: CitizenReportCategory
+    severity: ReportSeverity
+    summary: str = Field(min_length=1, max_length=500)
+    confidence: float = Field(ge=0, le=1)
+    needs_human_review: bool = True
+    generated_at: datetime = Field(default_factory=utc_now)
+    provider: str
+    model: str
+
+
+class CitizenReport(ContractModel):
+    report_id: str
+    report_text: str
+    location: LatLon | None = None
+    observed_at: datetime
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    idempotency_key: str
+    ai_processing_consent: bool = False
+    triage_status: ReportTriageStatus = ReportTriageStatus.PENDING
+    triage: CitizenReportTriage | None = None
+    triage_error: str | None = None
+
 
 class AuditEvent(ContractModel):
     event_id: str

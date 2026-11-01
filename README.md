@@ -22,9 +22,10 @@ Agmarknet and satellite flood layers are stretch goals unless already verified w
 
 1. Copy `.env.example` to `.env` and fill only keys you have verified.
 2. Create a virtual environment and install the project dependencies.
-3. Read `docs/00_START_HERE.md`, then `docs/05_INTERFACE_CONTRACTS.md`.
-4. Run `pytest`.
-5. Follow `docs/04_GIT_AND_TEAM_WORKFLOW.md`.
+3. With PostgreSQL running and `DATABASE_URL` configured, run `python -m db.migrate` to apply pending migrations.
+4. Read `docs/00_START_HERE.md`, then `docs/05_INTERFACE_CONTRACTS.md`.
+5. Run `pytest`.
+6. Follow `docs/04_GIT_AND_TEAM_WORKFLOW.md`.
 
 The documents in `docs/` are the implementation source of truth. If code and docs disagree, open a contract-change PR; do not silently invent a new interface.
 
@@ -99,3 +100,20 @@ Drivers can acknowledge a confirmed dispatch through
 `POST /plans/{plan_id}/acknowledgement`. Only the dispatched driver can
 acknowledge; identical retries are idempotent, and a positive acknowledgement
 does not move an `IN_TRANSIT` plan backwards.
+
+## Citizen reports and GenAI triage
+
+Citizen reports are stored in PostgreSQL and available to the frontend through
+`POST/GET /citizen-reports`; see [docs/13_CITIZEN_REPORTS_API.md](docs/13_CITIZEN_REPORTS_API.md)
+for exact payloads and response states. Reports are persisted before AI triage,
+and idempotency keys protect retries. AI processing is opt-in per report
+(`ai_processing_consent: true`). Configure `LLM_API_KEY`, `LLM_MODEL`, and
+optionally `LLM_BASE_URL` for an OpenAI-compatible chat-completions provider.
+Without that configuration, reports are still stored and returned with an
+explicit `UNAVAILABLE` triage status.
+
+AI output is an advisory classification and summary only. Every AI result is
+marked for human review; it cannot verify a reported hazard, approve a plan, or
+dispatch a response. The current API has no authentication or authorization, so
+do not expose citizen report reads or writes publicly until access controls are
+added.

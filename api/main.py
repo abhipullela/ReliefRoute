@@ -10,9 +10,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import Field
 
+from agent.citizen_reports import CitizenReportAgent
 from services.approval_workflow import ApprovalDispatchWorkflow
 from services.audit import PostgreSQLAuditService
+from services.citizen_reports import PostgreSQLCitizenReportStore
 from services.dispatch import PostgreSQLDispatchService
+from services.genai import OpenAICompatibleTriageProvider
 from services.plans import PostgreSQLPlanningStore
 from services.suppliers import PostgreSQLSupplierService
 from services.telemetry import PostgreSQLTelemetryService
@@ -20,6 +23,9 @@ from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import (
     ApprovalRequest,
+    CitizenReport,
+    CitizenReportSubmission,
+    ContractModel,
     DeliveryPlan,
     DispatchRequest,
     DispatchResult,
@@ -27,10 +33,10 @@ from shared.models import (
     DriverLocation,
     InventoryItem,
     LatLon,
+    ReportTriageStatus,
     Supplier,
     utc_now,
 )
-from shared.models import ContractModel
 
 load_dotenv()
 
@@ -55,6 +61,18 @@ async def lifespan(app: FastAPI):
     app.state.plans = PostgreSQLPlanningStore(database_url) if database_url else None
     app.state.dispatches = PostgreSQLDispatchService(database_url) if database_url else None
     app.state.audit = PostgreSQLAuditService(database_url) if database_url else None
+    app.state.citizen_report_store = (
+        PostgreSQLCitizenReportStore(database_url) if database_url else None
+    )
+    app.state.citizen_report_agent = (
+        CitizenReportAgent(
+            store=app.state.citizen_report_store,
+            triage_provider=OpenAICompatibleTriageProvider(),
+            audit=app.state.audit,
+        )
+        if database_url
+        else None
+    )
     app.state.approval_workflow = (
         ApprovalDispatchWorkflow(
             plans=app.state.plans,
@@ -153,9 +171,7 @@ async def health():
             detail={"status": "error", "database": "not_configured"},
         )
     try:
-        async with await psycopg.AsyncConnection.connect(
-            database_url, connect_timeout=10
-        ) as conn:
+        async with await psycopg.AsyncConnection.connect(database_url, connect_timeout=10) as conn:
             await conn.execute("SELECT 1")
         return {"status": "ok", "service": "reliefroute-api", "database": "connected"}
     except Exception as exc:
@@ -228,6 +244,73 @@ async def get_plan(plan_id: str):
         if plan is None:
             raise HTTPException(status_code=404, detail="Plan not found.")
         return plan
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.post(
+    "/citizen-reports",
+    response_model=CitizenReport,
+    status_code=201,
+)
+async def submit_citizen_report(body: CitizenReportSubmission):
+    agent = _service_or_503(
+        getattr(app.state, "citizen_report_agent", None),
+        "Citizen report service",
+    )
+    try:
+        return await agent.submit(body)
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.get("/citizen-reports", response_model=list[CitizenReport])
+async def list_citizen_reports(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    triage_status: ReportTriageStatus | None = None,
+):
+    store = _service_or_503(
+        getattr(app.state, "citizen_report_store", None),
+        "Citizen report store",
+    )
+    try:
+        return await store.list_reports(
+            limit=limit,
+            offset=offset,
+            triage_status=triage_status,
+        )
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.get("/citizen-reports/{report_id}", response_model=CitizenReport)
+async def get_citizen_report(report_id: str):
+    store = _service_or_503(
+        getattr(app.state, "citizen_report_store", None),
+        "Citizen report store",
+    )
+    try:
+        report = await store.get_report(report_id)
+        if report is None:
+            raise ReliefRouteError(
+                ErrorCode.NOT_FOUND,
+                f"Citizen report '{report_id}' was not found.",
+                provider="citizen_reports",
+            )
+        return report
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.post("/citizen-reports/{report_id}/triage", response_model=CitizenReport)
+async def retriage_citizen_report(report_id: str):
+    agent = _service_or_503(
+        getattr(app.state, "citizen_report_agent", None),
+        "Citizen report service",
+    )
+    try:
+        return await agent.triage(report_id)
     except ReliefRouteError as exc:
         _raise_http_error(exc)
 

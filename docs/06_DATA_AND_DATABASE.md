@@ -9,11 +9,13 @@
 - `driver_locations`: timestamped driver coordinates and source/consent.
 - `plans`: status, unique idempotency key, canonical plan payload.
 - `dispatches`: dispatch attempts, unique idempotency key, provider message ID.
+- `citizen_reports`: user-submitted incident text, optional location, consent, and versioned AI triage payload.
 - `audit_events`: append-only record of important actions and outcomes.
 
 Apply SQL changes through the ordered, checksum-verified files in `db/migrations/`;
 never edit a migration after it has been applied. Migration `002` adds the index
 used to resolve a driver's confirmed dispatch for acknowledgement.
+Migration `003` creates the citizen-report storage and indexes.
 
 ## Data freshness
 - Weather: record retrieval time and forecast window; warn if older than `WEATHER_MAX_AGE_MINUTES`.
