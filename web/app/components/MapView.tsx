@@ -1,4 +1,6 @@
 "use client";
+import "maplibre-gl/dist/maplibre-gl.css";
+
 // app/components/MapView.tsx
 // MapLibre GL map rendering the route LineString and hazard polygons.
 // STRICT RULE: Hazard polygons MUST be labelled "Modeled Forecast Risk"
@@ -7,6 +9,7 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import type { DeliveryPlan, GeoJSONPolygon } from "@/app/types/api";
 import { AlertTriangle } from "lucide-react";
+import maplibregl from "maplibre-gl";
 
 // -------------------------------------------------------------------------
 // Helpers
@@ -36,19 +39,14 @@ interface MapViewProps {
 
 export default function MapView({ plan }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const mapRef = useRef<any | null>(null);
   const initializedRef = useRef(false);
 
-  const initMap = useCallback(async () => {
+  const initMap = useCallback(() => {
     if (initializedRef.current || !containerRef.current) return;
     initializedRef.current = true;
 
-    const maplibregl = await import("maplibre-gl");
-    await import("maplibre-gl/dist/maplibre-gl.css");
-
-    // Set worker URL to CDN build so Turbopack doesn't break the worker bundle
-    (maplibregl as any).workerUrl =
-      "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl-csp-worker.js";
+    maplibregl.workerUrl = "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl-csp-worker.js";
 
     const origin = latLonToLngLat(plan.origin);
     const destination = latLonToLngLat(plan.destination);
@@ -60,30 +58,7 @@ export default function MapView({ plan }: MapViewProps) {
     const map = new maplibregl.Map({
       container: containerRef.current!,
       maxZoom: 18,
-      style: {
-        version: 8,
-        sources: {
-          "osm-tiles": {
-            type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            maxzoom: 18,
-            attribution: "© OpenStreetMap contributors",
-          },
-        },
-        layers: [
-          {
-            id: "osm",
-            type: "raster",
-            source: "osm-tiles",
-            paint: {
-              "raster-opacity": 0.85,
-              "raster-saturation": -0.4,
-              "raster-brightness-min": 0.05,
-            },
-          },
-        ],
-      },
+      style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
       center,
       zoom: 9,
     });
@@ -243,10 +218,7 @@ export default function MapView({ plan }: MapViewProps) {
   }, [plan]);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
-    initMap().then((fn) => {
-      cleanup = fn;
-    });
+    const cleanup = initMap();
     return () => {
       cleanup?.();
     };
@@ -254,6 +226,18 @@ export default function MapView({ plan }: MapViewProps) {
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden">
+      {/* MapLibre Popup Global Override */}
+      <style>{`
+        .maplibregl-popup-content {
+          background: transparent !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+        }
+        .maplibregl-popup-tip {
+          display: none !important;
+        }
+      `}</style>
+
       {/* Map container */}
       <div ref={containerRef} className="absolute inset-0" />
 

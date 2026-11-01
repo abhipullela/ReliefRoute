@@ -1,0 +1,302 @@
+[
+  {
+    "plan_id": "PLAN-FLOOD-951",
+    "created_at": "2026-11-01T14:50:34.395470+00:00",
+    "supplier_id": "supplier-electronic-city-01",
+    "commodity": "Drinking Water & Emergency Medical Kits",
+    "quantity": 63,
+    "unit": "crates",
+    "origin": {
+      "latitude": 12.8442,
+      "longitude": 77.6648
+    },
+    "destination": {
+      "latitude": 12.713768555609398,
+      "longitude": 77.69811508137587
+    },
+    "status": "NEEDS_APPROVAL",
+    "approval_required": true,
+    "idempotency_key": "idemp-PLAN-FLOOD-951",
+    "hazard_assessment_id": "haz-PLAN-FLOOD-951",
+    "rationale": [
+      "Gen AI Ingestion: FLOOD & MEDICAL DISTRESS detected.",
+      "Citizen reported: 21 affected in Anekal Town Relief Point.",
+      "Allocated: 63 crates of Drinking Water & Emergency Medical Kits.",
+      "Modeled flood avoidance routing computed; operator approval gate triggered."
+    ],
+    "source_refs": [
+      {
+        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T14:50:34.395476+00:00",
+        "stale": false,
+        "notes": "Natural language emergency ingestion"
+      }
+    ],
+    "route": {
+      "provider": "openrouteservice",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.6648,
+            12.8442
+          ],
+          [
+            77.6714035844397,
+            12.796722360740343
+          ],
+          [
+            77.68864069191167,
+            12.760672823105406
+          ],
+          [
+            77.69811508137587,
+            12.713768555609398
+          ]
+        ]
+      },
+      "distance_m": 17917,
+      "duration_s": 1791,
+      "avoids_requested_polygons": true,
+      "risk_level": "HIGH",
+      "warnings": [
+        "Surface flood runoff detected near Anekal Town Relief Point"
+      ],
+      "source": {
+        "provider": "openrouteservice",
+        "retrieved_at": "2026-11-01T14:50:34.395478+00:00",
+        "stale": false
+      }
+    },
+    "hazard_polygons": [
+      {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.68611508137587,
+              12.725768555609399
+            ],
+            [
+              77.71011508137587,
+              12.725768555609399
+            ],
+            [
+              77.71251508137587,
+              12.701768555609398
+            ],
+            [
+              77.68611508137587,
+              12.704168555609398
+            ],
+            [
+              77.68611508137587,
+              12.725768555609399
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "plan_id": "PLAN-FLOOD-101",
+    "created_at": "2026-11-01T14:50:34.394274+00:00",
+    "supplier_id": "supplier-electronic-city-01",
+    "commodity": "Drinking Water & Emergency Medical Kits",
+    "quantity": 120,
+    "unit": "crates",
+    "origin": {
+      "latitude": 12.8442,
+      "longitude": 77.6648
+    },
+    "destination": {
+      "latitude": 12.753298750981966,
+      "longitude": 77.7022180863665
+    },
+    "status": "NEEDS_APPROVAL",
+    "approval_required": true,
+    "idempotency_key": "idemp-PLAN-FLOOD-101",
+    "hazard_assessment_id": "haz-PLAN-FLOOD-101",
+    "rationale": [
+      "Gen AI Ingestion: FLOOD & MEDICAL DISTRESS detected.",
+      "Citizen reported: 40 affected in Marsur Village Inundation Zone.",
+      "Allocated: 120 crates of Drinking Water & Emergency Medical Kits.",
+      "Modeled flood avoidance routing computed; operator approval gate triggered."
+    ],
+    "source_refs": [
+      {
+        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T14:50:34.394282+00:00",
+        "stale": false,
+        "notes": "Natural language emergency ingestion"
+      }
+    ],
+    "route": {
+      "provider": "openrouteservice",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.6648,
+            12.8442
+          ],
+          [
+            77.6741473378029,
+            12.812443720135578
+          ],
+          [
+            77.68858931182841,
+            12.788427641348989
+          ],
+          [
+            77.7022180863665,
+            12.753298750981966
+          ]
+        ]
+      },
+      "distance_m": 13720,
+      "duration_s": 1372,
+      "avoids_requested_polygons": true,
+      "risk_level": "HIGH",
+      "warnings": [
+        "Surface flood runoff detected near Marsur Village Inundation Zone"
+      ],
+      "source": {
+        "provider": "openrouteservice",
+        "retrieved_at": "2026-11-01T14:50:34.394285+00:00",
+        "stale": false
+      }
+    },
+    "hazard_polygons": [
+      {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.6902180863665,
+              12.765298750981966
+            ],
+            [
+              77.7142180863665,
+              12.765298750981966
+            ],
+            [
+              77.7166180863665,
+              12.741298750981965
+            ],
+            [
+              77.6902180863665,
+              12.743698750981965
+            ],
+            [
+              77.6902180863665,
+              12.765298750981966
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "plan_id": "PLAN-FLOOD-362",
+    "created_at": "2026-11-01T14:50:34.392598+00:00",
+    "supplier_id": "supplier-electronic-city-01",
+    "commodity": "Drinking Water & Ready-to-Eat Meal Packs",
+    "quantity": 75,
+    "unit": "crates",
+    "origin": {
+      "latitude": 12.8442,
+      "longitude": 77.6648
+    },
+    "destination": {
+      "latitude": 12.797932872814258,
+      "longitude": 77.69684812902541
+    },
+    "status": "NEEDS_APPROVAL",
+    "approval_required": true,
+    "idempotency_key": "idemp-PLAN-FLOOD-362",
+    "hazard_assessment_id": "haz-PLAN-FLOOD-362",
+    "rationale": [
+      "Gen AI Ingestion: FLASH FLOOD INUNDATION detected.",
+      "Citizen reported: 25 affected in Chandapura Circle Basin.",
+      "Allocated: 75 crates of Drinking Water & Ready-to-Eat Meal Packs.",
+      "Modeled flood avoidance routing computed; operator approval gate triggered."
+    ],
+    "source_refs": [
+      {
+        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T14:50:34.392841+00:00",
+        "stale": false,
+        "notes": "Natural language emergency ingestion"
+      }
+    ],
+    "route": {
+      "provider": "openrouteservice",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.6648,
+            12.8442
+          ],
+          [
+            77.67186062276876,
+            12.83392130441942
+          ],
+          [
+            77.68613224318106,
+            12.81410292773029
+          ],
+          [
+            77.69684812902541,
+            12.797932872814258
+          ]
+        ]
+      },
+      "distance_m": 15180,
+      "duration_s": 1518,
+      "avoids_requested_polygons": true,
+      "risk_level": "MODERATE",
+      "warnings": [
+        "Surface flood runoff detected near Chandapura Circle Basin"
+      ],
+      "source": {
+        "provider": "openrouteservice",
+        "retrieved_at": "2026-11-01T14:50:34.392846+00:00",
+        "stale": false
+      }
+    },
+    "hazard_polygons": [
+      {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.68484812902541,
+              12.809932872814258
+            ],
+            [
+              77.70884812902541,
+              12.809932872814258
+            ],
+            [
+              77.7112481290254,
+              12.785932872814257
+            ],
+            [
+              77.68484812902541,
+              12.788332872814257
+            ],
+            [
+              77.68484812902541,
+              12.809932872814258
+            ]
+          ]
+        ]
+      }
+    ]
+  }
+]

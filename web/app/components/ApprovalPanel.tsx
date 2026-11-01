@@ -117,7 +117,7 @@ export default function ApprovalPanel({
   const commentId = useId();
 
   const canDecide =
-    plan.status === "NEEDS_APPROVAL" || plan.status === "DRAFT";
+    plan.status === "NEEDS_APPROVAL" || plan.status === "PENDING_APPROVAL" || plan.status === "DRAFT";
   const isApproved = plan.status === "APPROVED" || plan.status === "DISPATCHED" ||
     plan.status === "ACKNOWLEDGED" || plan.status === "IN_TRANSIT" ||
     plan.status === "COMPLETED";

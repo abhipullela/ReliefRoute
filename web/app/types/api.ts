@@ -81,6 +81,27 @@ export interface DeliveryPlan {
   rationale: string[];
   source_refs: SourceRef[];
   hazard_polygons?: GeoJSONPolygon[];
+  gen_ai_extraction?: GenAIExtractedData;
+}
+
+export interface GenAIExtractedData {
+  emergency_type: string;
+  requested_supplies: string[];
+  extracted_location: string;
+  original_message?: string;
+  confidence?: number;
+  people_affected?: number;
+}
+
+export interface ActiveFloodArea {
+  plan_id: string;
+  name: string;
+  coordinates: [number, number]; // [longitude, latitude]
+  severity: "CRITICAL" | "HIGH" | "MODERATE";
+  water_level: string;
+  commodity: string;
+  status: PlanStatus;
+  people_affected: number;
 }
 
 export interface ApprovalRequest {

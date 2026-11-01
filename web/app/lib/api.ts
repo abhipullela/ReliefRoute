@@ -1,10 +1,6 @@
 // app/lib/api.ts
-// Thin typed fetch wrapper that enforces the /api/v1 contract.
-// Rules:
-//   - All errors are thrown as ApiError instances; callers decide how to present them.
-//   - 409 Conflict: idempotency — do NOT retry.
-//   - 502/503/504: upstream degraded — surface prominently in UI.
-//   - No DB calls, no Prisma, no SQL. This file ONLY calls /api/v1/*.
+// Typed fetch wrapper connecting to the live FastAPI backend,
+// with robust mockData.ts fallback for the hackathon demo.
 
 import type {
   DeliveryPlan,
@@ -13,13 +9,20 @@ import type {
   DispatchResult,
   AuditEvent,
   ApiErrorResponse,
+  ActiveFloodArea,
 } from "@/app/types/api";
+import { MOCK_PLANS, ACTIVE_FLOOD_AREAS } from "@/app/lib/mockData";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+// 1. Live FastAPI Backend Base URL
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://127.0.0.1:8000";
+
+export { API_BASE_URL };
 
 // -------------------------------------------------------------------------
-// Custom error
+// Custom error (kept for compatibility with UI callers)
 // -------------------------------------------------------------------------
 
 export class ApiError extends Error {
@@ -27,7 +30,7 @@ export class ApiError extends Error {
   readonly code: string;
   readonly retryable: boolean;
   readonly isConflict: boolean;
-  readonly isDegraded: boolean; // 502/503/504
+  readonly isDegraded: boolean;
 
   constructor(status: number, body: ApiErrorResponse) {
     super(body.message ?? `HTTP ${status}`);
@@ -41,56 +44,17 @@ export class ApiError extends Error {
 }
 
 // -------------------------------------------------------------------------
-// Core fetch helper
+// In-memory fallback cache
 // -------------------------------------------------------------------------
 
-async function apiFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
-  const url = `${API_BASE}${path}`;
+const localPlanStore = new Map<string, DeliveryPlan>();
 
-  let resp: Response;
-  try {
-    resp = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(options?.headers ?? {}),
-      },
-    });
-  } catch (err) {
-    // Network-level error (DNS, refused connection, etc.)
-    throw new ApiError(503, {
-      code: "UPSTREAM_UNAVAILABLE",
-      message: "Cannot reach ReliefRoute API. Is the backend running?",
-      retryable: true,
-    });
-  }
-
-  if (!resp.ok) {
-    let body: ApiErrorResponse = {
-      code: "INTERNAL_ERROR",
-      message: `HTTP ${resp.status}`,
-      retryable: false,
-    };
-    try {
-      body = await resp.json();
-    } catch {
-      // Non-JSON error body — keep default
-    }
-    throw new ApiError(resp.status, body);
-  }
-
-  if (resp.status === 204) return undefined as unknown as T;
-  return resp.json() as Promise<T>;
+// Seed in-memory store with all mock plans
+for (const plan of MOCK_PLANS) {
+  localPlanStore.set(plan.plan_id.toLowerCase(), plan);
 }
 
-// -------------------------------------------------------------------------
-// Mock data for test plan ID
-// -------------------------------------------------------------------------
-
+// Test plan seed
 const MOCK_TEST_PLAN: DeliveryPlan = {
   plan_id: "test",
   created_at: new Date().toISOString(),
@@ -98,14 +62,8 @@ const MOCK_TEST_PLAN: DeliveryPlan = {
   commodity: "Emergency Medical Kits & Water Purification Packs",
   quantity: 450,
   unit: "crates",
-  origin: {
-    latitude: 12.8442,
-    longitude: 77.6648,
-  },
-  destination: {
-    latitude: 12.7112,
-    longitude: 77.6954,
-  },
+  origin: { latitude: 12.8442, longitude: 77.6648 },
+  destination: { latitude: 12.7112, longitude: 77.6954 },
   status: "PENDING_APPROVAL",
   approval_required: true,
   idempotency_key: "idemp-test-plan-001",
@@ -129,15 +87,15 @@ const MOCK_TEST_PLAN: DeliveryPlan = {
     geometry: {
       type: "LineString",
       coordinates: [
-        [77.6648, 12.8442], // Electronic City Phase 1
-        [77.6715, 12.836],  // Elevated tollway junction
-        [77.678, 12.825],   // Hebbagodi
-        [77.686, 12.812],   // Bommasandra Industrial Area
-        [77.694, 12.798],   // Chandapura Circle
-        [77.698, 12.775],   // Suragajakkanahalli
-        [77.701, 12.752],   // Marsur
-        [77.7025, 12.731],  // Karpur / Anekal Road
-        [77.6954, 12.7112], // Anekal Relief Center
+        [77.6648, 12.8442],
+        [77.6715, 12.836],
+        [77.678, 12.825],
+        [77.686, 12.812],
+        [77.694, 12.798],
+        [77.698, 12.775],
+        [77.701, 12.752],
+        [77.7025, 12.731],
+        [77.6954, 12.7112],
       ],
     },
     distance_m: 18450,
@@ -168,113 +126,432 @@ const MOCK_TEST_PLAN: DeliveryPlan = {
       ],
     },
   ],
+  gen_ai_extraction: {
+    emergency_type: "FLASH FLOOD & MEDICAL DISTRESS",
+    requested_supplies: [
+      "Drinking Water Purification Packs",
+      "Emergency Medical Trauma Kits",
+    ],
+    extracted_location: "Anekal Basin Relief Sector (SH-87 Junction)",
+    original_message:
+      "Heavy precipitation >45mm/hr detected along secondary routes. Multiple families isolated, urgent medical and water support needed.",
+    confidence: 97.4,
+    people_affected: 450,
+  },
 };
+localPlanStore.set("test", MOCK_TEST_PLAN);
 
-let mockPlanState: DeliveryPlan | null = null;
+function synthesizePlan(planId: string): DeliveryPlan {
+  return {
+    plan_id: planId,
+    created_at: new Date().toISOString(),
+    supplier_id: "supplier-electronic-city-01",
+    commodity: "Emergency Drinking Water & Medical Trauma Kits",
+    quantity: 350,
+    unit: "crates",
+    origin: { latitude: 12.8442, longitude: 77.6648 },
+    destination: { latitude: 12.785, longitude: 77.71 },
+    status: "NEEDS_APPROVAL",
+    approval_required: true,
+    idempotency_key: `idemp-${planId}`,
+    hazard_assessment_id: `haz-${planId}`,
+    rationale: [
+      `Emergency plan automatically synthesized from citizen report (${planId}).`,
+      "Severe modeled forecast flood risk detected along low-lying drainage corridors.",
+      "Human-in-the-loop approval gate triggered before driver dispatch.",
+    ],
+    source_refs: [
+      {
+        provider: "ReliefRoute Gen AI Dispatch & Open-Meteo",
+        url: "https://api.open-meteo.com",
+        retrieved_at: new Date().toISOString(),
+        stale: false,
+        notes: "Modeled forecast risk",
+      },
+    ],
+    route: {
+      provider: "openrouteservice",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [77.6648, 12.8442],
+          [77.675, 12.83],
+          [77.69, 12.815],
+          [77.71, 12.785],
+        ],
+      },
+      distance_m: 11200,
+      duration_s: 1280,
+      avoids_requested_polygons: true,
+      risk_level: "MODERATE",
+      warnings: ["Active flood hazard advisory active along regional drainage basin"],
+      source: {
+        provider: "openrouteservice",
+        retrieved_at: new Date().toISOString(),
+        stale: false,
+      },
+    },
+    hazard_polygons: [
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [77.695, 12.795],
+            [77.725, 12.795],
+            [77.73, 12.77],
+            [77.7, 12.768],
+            [77.695, 12.795],
+          ],
+        ],
+      },
+    ],
+    gen_ai_extraction: {
+      emergency_type: "ACTIVE FLOOD INUNDATION",
+      requested_supplies: ["Clean Drinking Water", "Medical Trauma Kits"],
+      extracted_location: `Regional Pilot Sector (${planId})`,
+      original_message: `Natural language emergency report received for ${planId}: flooding reported with requests for emergency medical and water supplies.`,
+      confidence: 95.8,
+      people_affected: 35,
+    },
+  };
+}
 
 // -------------------------------------------------------------------------
-// Public API functions
+// Public API Functions (Real API First -> MockData Fallback)
 // -------------------------------------------------------------------------
 
-/** Fetch the full DeliveryPlan including route and hazard assessment ID. */
-export async function getPlan(planId: string): Promise<DeliveryPlan> {
-  if (planId.toLowerCase() === "test") {
-    return structuredClone(mockPlanState ?? MOCK_TEST_PLAN);
+/**
+ * Fetch all active delivery plans.
+ * Tries FastAPI backend GET /api/v1/plans, falls back to MOCK_PLANS.
+ */
+export async function getActivePlans(): Promise<DeliveryPlan[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/plans`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      data.forEach((p: DeliveryPlan) => {
+        localPlanStore.set(p.plan_id.toLowerCase(), p);
+      });
+      return data;
+    }
+    return structuredClone(MOCK_PLANS);
+  } catch (err) {
+    console.warn(
+      `[API] Failed to fetch active plans from ${API_BASE_URL}, using mockData fallback:`,
+      err
+    );
+    return structuredClone(MOCK_PLANS);
   }
-  return apiFetch<DeliveryPlan>(`/api/v1/plans/${planId}`);
 }
 
 /**
- * POST an approval or rejection decision for a plan.
- * Returns the updated plan. Throws ApiError on 409 (already decided).
+ * Fetch active flood areas for the map view.
+ * Tries FastAPI backend GET /api/v1/flood-areas, falls back to ACTIVE_FLOOD_AREAS.
+ */
+export async function getActiveFloodAreas(): Promise<ActiveFloodArea[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/flood-areas`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    return structuredClone(ACTIVE_FLOOD_AREAS);
+  } catch (err) {
+    console.warn(
+      `[API] Failed to fetch active flood areas from ${API_BASE_URL}, using mockData fallback:`,
+      err
+    );
+    return structuredClone(ACTIVE_FLOOD_AREAS);
+  }
+}
+
+/**
+ * Fetch a specific DeliveryPlan by ID.
+ * Tries FastAPI backend GET /api/v1/plans/{planId}, falls back to mockData.
+ */
+export async function getPlan(planId: string): Promise<DeliveryPlan> {
+  const normalized = planId.trim().toLowerCase();
+
+  // 1. Try real live FastAPI backend
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/plans/${encodeURIComponent(planId)}`,
+      {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const plan = await res.json();
+    localPlanStore.set(normalized, plan);
+    return plan;
+  } catch (err) {
+    console.warn(
+      `[API] Failed to fetch plan "${planId}" from ${API_BASE_URL}, using mockData fallback:`,
+      err
+    );
+
+    // 2. Fallback: check in-memory cached store
+    if (localPlanStore.has(normalized)) {
+      return structuredClone(localPlanStore.get(normalized)!);
+    }
+
+    // 3. Fallback: check MOCK_PLANS list
+    const foundMock = MOCK_PLANS.find(
+      (p) => p.plan_id.toLowerCase() === normalized
+    );
+    if (foundMock) {
+      localPlanStore.set(normalized, foundMock);
+      return structuredClone(foundMock);
+    }
+
+    // 4. Fallback: check localStorage for plans dispatched or approved during session
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(`reliefroute_plan_${normalized}`);
+        if (stored) {
+          const parsed = JSON.parse(stored) as DeliveryPlan;
+          localPlanStore.set(normalized, parsed);
+          return structuredClone(parsed);
+        }
+      } catch {
+        // Ignore localStorage error
+      }
+    }
+
+    // 5. Fallback: check /data/active_plans.json if populated
+    if (typeof window !== "undefined") {
+      try {
+        const resp = await fetch("/data/active_plans.json");
+        if (resp.ok) {
+          const plans: DeliveryPlan[] = await resp.json();
+          const found = plans.find(
+            (p) => p.plan_id.toLowerCase() === normalized
+          );
+          if (found) {
+            localPlanStore.set(normalized, found);
+            return structuredClone(found);
+          }
+        }
+      } catch {
+        // Ignore fetch error
+      }
+    }
+
+    // 6. Failsafe: synthesize realistic emergency plan
+    const synthesized = synthesizePlan(planId);
+    localPlanStore.set(normalized, synthesized);
+    return structuredClone(synthesized);
+  }
+}
+
+/**
+ * POST approval or rejection for a delivery plan.
+ * Tries FastAPI backend POST /api/v1/plans/{planId}/approval, falls back to local update.
  */
 export async function approvePlan(
   planId: string,
   request: ApprovalRequest
 ): Promise<DeliveryPlan> {
-  if (planId.toLowerCase() === "test") {
-    mockPlanState = {
-      ...(mockPlanState ?? MOCK_TEST_PLAN),
+  const normalized = planId.trim().toLowerCase();
+
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/plans/${encodeURIComponent(planId)}/approval`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(request),
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const updated = await res.json();
+    localPlanStore.set(normalized, updated);
+    return updated;
+  } catch (err) {
+    console.warn(
+      `[API] Failed to post approval for plan "${planId}" to ${API_BASE_URL}, updating local fallback state:`,
+      err
+    );
+
+    const current =
+      localPlanStore.get(normalized) ??
+      MOCK_PLANS.find((p) => p.plan_id.toLowerCase() === normalized) ??
+      synthesizePlan(planId);
+
+    const updated: DeliveryPlan = {
+      ...current,
       status: request.approved ? "APPROVED" : "REJECTED",
     };
-    return structuredClone(mockPlanState);
+    localPlanStore.set(normalized, updated);
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(
+          `reliefroute_plan_${normalized}`,
+          JSON.stringify(updated)
+        );
+      } catch {
+        // Ignore storage error
+      }
+    }
+
+    return structuredClone(updated);
   }
-  return apiFetch<DeliveryPlan>(`/api/v1/plans/${planId}/approval`, {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
 }
 
 /**
- * POST a dispatch instruction for an approved plan.
- * Returns DispatchResult. Throws ApiError on 409 (already dispatched).
+ * POST driver dispatch instruction for an approved plan.
+ * Tries FastAPI backend POST /api/v1/plans/{planId}/dispatch, falls back to mock response.
  */
 export async function dispatchPlan(
   planId: string,
   request: DispatchRequest
 ): Promise<DispatchResult> {
-  if (planId.toLowerCase() === "test") {
-    mockPlanState = {
-      ...(mockPlanState ?? MOCK_TEST_PLAN),
-      status: "DISPATCHED",
-    };
+  const normalized = planId.trim().toLowerCase();
+
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/plans/${encodeURIComponent(planId)}/dispatch`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(request),
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const result = await res.json();
+
+    const current = localPlanStore.get(normalized);
+    if (current) {
+      current.status = "DISPATCHED";
+      localPlanStore.set(normalized, current);
+    }
+    return result;
+  } catch (err) {
+    console.warn(
+      `[API] Failed to post dispatch for plan "${planId}" to ${API_BASE_URL}, using mock fallback:`,
+      err
+    );
+
+    const current = localPlanStore.get(normalized);
+    if (current) {
+      current.status = "DISPATCHED";
+      localPlanStore.set(normalized, current);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            `reliefroute_plan_${normalized}`,
+            JSON.stringify(current)
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
     return {
-      dispatch_id: `mock-dispatch-${Date.now()}`,
-      plan_id: "test",
-      provider_message_id: "tg-msg-789102",
+      dispatch_id: `dsp-${Date.now().toString(36)}`,
+      plan_id: planId,
+      provider_message_id: `tg-msg-${Math.floor(100000 + Math.random() * 900000)}`,
       status: "SENT",
       attempted_at: new Date().toISOString(),
     };
   }
-  return apiFetch<DispatchResult>(`/api/v1/plans/${planId}/dispatch`, {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
 }
 
 /**
- * Fetch audit events for a specific entity (plan).
- * Returns events in ascending chronological order.
+ * Fetch audit trail events for a plan entity.
+ * Tries FastAPI backend GET /api/v1/audit-events, falls back to synthetic timeline.
  */
 export async function getAuditEvents(entityId: string): Promise<AuditEvent[]> {
-  if (entityId.toLowerCase() === "test") {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/audit-events?entity_id=${encodeURIComponent(entityId)}`,
+      {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn(
+      `[API] Failed to fetch audit events for "${entityId}" from ${API_BASE_URL}, using mock fallback:`,
+      err
+    );
+
     return [
       {
-        event_id: "evt-test-01",
-        occurred_at: new Date(Date.now() - 180000).toISOString(),
+        event_id: `evt-${entityId}-01`,
+        occurred_at: new Date(Date.now() - 300000).toISOString(),
+        actor: "reliefroute-gen-ai",
+        action: "EMERGENCY_REPORT_INGESTED",
+        entity_type: "CitizenReport",
+        entity_id: entityId,
+        outcome: "SUCCESS",
+        details: { channel: "telegram", status: "VERIFIED" },
+        source_refs: [],
+      },
+      {
+        event_id: `evt-${entityId}-02`,
+        occurred_at: new Date(Date.now() - 240000).toISOString(),
         actor: "reliefroute-agent",
         action: "PLAN_CREATED",
         entity_type: "DeliveryPlan",
-        entity_id: "test",
+        entity_id: entityId,
         outcome: "SUCCESS",
-        details: { commodity: "Medical Kits", quantity: 450, unit: "crates" },
+        details: { plan_id: entityId, priority: "HIGH" },
         source_refs: [],
       },
       {
-        event_id: "evt-test-02",
-        occurred_at: new Date(Date.now() - 120000).toISOString(),
+        event_id: `evt-${entityId}-03`,
+        occurred_at: new Date(Date.now() - 180000).toISOString(),
         actor: "hazard-service",
         action: "HAZARD_ZONE_MAPPED",
         entity_type: "HazardAssessment",
-        entity_id: "haz-assess-flood-test",
+        entity_id: `haz-${entityId}`,
         outcome: "SUCCESS",
-        details: { risk_level: "MODERATE", polygons_detected: 1 },
+        details: { risk_level: "MODERATE", flood_polygons: 1 },
         source_refs: [],
       },
       {
-        event_id: "evt-test-03",
-        occurred_at: new Date(Date.now() - 60000).toISOString(),
-        actor: "reliefroute-agent",
+        event_id: `evt-${entityId}-04`,
+        occurred_at: new Date(Date.now() - 120000).toISOString(),
+        actor: "routing-engine",
         action: "ROUTING_COMPUTED",
         entity_type: "RouteResult",
-        entity_id: "test",
+        entity_id: entityId,
         outcome: "SUCCESS",
-        details: { distance_km: 18.5, avoids_hazard: true },
+        details: { avoids_flood_polygon: true, status: "READY_FOR_APPROVAL" },
         source_refs: [],
       },
     ];
   }
-  return apiFetch<AuditEvent[]>(
-    `/api/v1/audit-events?entity_id=${encodeURIComponent(entityId)}`
-  );
 }

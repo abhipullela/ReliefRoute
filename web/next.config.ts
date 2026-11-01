@@ -11,12 +11,24 @@ const nextConfig: NextConfig = {
     ];
   },
   turbopack: {
+    resolveAlias: {
+      "maplibre-gl/dist/maplibre-gl.css": "./node_modules/maplibre-gl/dist/maplibre-gl.css",
+      "maplibre-gl": "./app/lib/maplibre-compat.ts",
+    },
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },
     },
+  },
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "maplibre-gl$": "./app/lib/maplibre-compat.ts",
+    };
+    return config;
   },
 };
 

@@ -52,16 +52,15 @@
     height: 100% !important;
   }
 
-  /* Popup styling override */
+  /* MapLibre Popup styling override — transparent wrapper for seamless dark cards */
   .maplibregl-popup-content {
-    background: white;
-    color: #0f172a;
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    padding: 10px 14px !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
   }
-  .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
-    border-top-color: white !important;
+  .maplibregl-popup-tip {
+    display: none !important;
   }
 
   /* animate-in utilities (graceful degradation if not present) */
