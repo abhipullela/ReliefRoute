@@ -1,310 +1,10 @@
 [
   {
-    "plan_id": "PLAN-FLOOD-951",
-    "created_at": "2026-11-01T14:50:34.395470+00:00",
-    "supplier_id": "supplier-electronic-city-01",
-    "commodity": "Drinking Water & Emergency Medical Kits",
-    "quantity": 63,
-    "unit": "crates",
-    "origin": {
-      "latitude": 12.8442,
-      "longitude": 77.6648
-    },
-    "destination": {
-      "latitude": 12.713768555609398,
-      "longitude": 77.69811508137587
-    },
-    "status": "NEEDS_APPROVAL",
-    "approval_required": true,
-    "idempotency_key": "idemp-PLAN-FLOOD-951",
-    "hazard_assessment_id": "haz-PLAN-FLOOD-951",
-    "rationale": [
-      "Gen AI Ingestion: FLOOD & MEDICAL DISTRESS detected.",
-      "Citizen reported: 21 affected in Anekal Town Relief Point.",
-      "Allocated: 63 crates of Drinking Water & Emergency Medical Kits.",
-      "Modeled flood avoidance routing computed; operator approval gate triggered."
-    ],
-    "source_refs": [
-      {
-        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
-        "url": "https://api.open-meteo.com",
-        "retrieved_at": "2026-11-01T14:50:34.395476+00:00",
-        "stale": false,
-        "notes": "Natural language emergency ingestion"
-      }
-    ],
-    "route": {
-      "provider": "openrouteservice",
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [
-          [
-            77.6648,
-            12.8442
-          ],
-          [
-            77.6714035844397,
-            12.796722360740343
-          ],
-          [
-            77.68864069191167,
-            12.760672823105406
-          ],
-          [
-            77.69811508137587,
-            12.713768555609398
-          ]
-        ]
-      },
-      "distance_m": 17917,
-      "duration_s": 1791,
-      "avoids_requested_polygons": true,
-      "risk_level": "HIGH",
-      "warnings": [
-        "Surface flood runoff detected near Anekal Town Relief Point"
-      ],
-      "source": {
-        "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T14:50:34.395478+00:00",
-        "stale": false
-      }
-    },
-    "hazard_polygons": [
-      {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              77.68611508137587,
-              12.725768555609399
-            ],
-            [
-              77.71011508137587,
-              12.725768555609399
-            ],
-            [
-              77.71251508137587,
-              12.701768555609398
-            ],
-            [
-              77.68611508137587,
-              12.704168555609398
-            ],
-            [
-              77.68611508137587,
-              12.725768555609399
-            ]
-          ]
-        ]
-      }
-    ]
-  },
-  {
-    "plan_id": "PLAN-FLOOD-101",
-    "created_at": "2026-11-01T14:50:34.394274+00:00",
-    "supplier_id": "supplier-electronic-city-01",
-    "commodity": "Drinking Water & Emergency Medical Kits",
-    "quantity": 120,
-    "unit": "crates",
-    "origin": {
-      "latitude": 12.8442,
-      "longitude": 77.6648
-    },
-    "destination": {
-      "latitude": 12.753298750981966,
-      "longitude": 77.7022180863665
-    },
-    "status": "NEEDS_APPROVAL",
-    "approval_required": true,
-    "idempotency_key": "idemp-PLAN-FLOOD-101",
-    "hazard_assessment_id": "haz-PLAN-FLOOD-101",
-    "rationale": [
-      "Gen AI Ingestion: FLOOD & MEDICAL DISTRESS detected.",
-      "Citizen reported: 40 affected in Marsur Village Inundation Zone.",
-      "Allocated: 120 crates of Drinking Water & Emergency Medical Kits.",
-      "Modeled flood avoidance routing computed; operator approval gate triggered."
-    ],
-    "source_refs": [
-      {
-        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
-        "url": "https://api.open-meteo.com",
-        "retrieved_at": "2026-11-01T14:50:34.394282+00:00",
-        "stale": false,
-        "notes": "Natural language emergency ingestion"
-      }
-    ],
-    "route": {
-      "provider": "openrouteservice",
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [
-          [
-            77.6648,
-            12.8442
-          ],
-          [
-            77.6741473378029,
-            12.812443720135578
-          ],
-          [
-            77.68858931182841,
-            12.788427641348989
-          ],
-          [
-            77.7022180863665,
-            12.753298750981966
-          ]
-        ]
-      },
-      "distance_m": 13720,
-      "duration_s": 1372,
-      "avoids_requested_polygons": true,
-      "risk_level": "HIGH",
-      "warnings": [
-        "Surface flood runoff detected near Marsur Village Inundation Zone"
-      ],
-      "source": {
-        "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T14:50:34.394285+00:00",
-        "stale": false
-      }
-    },
-    "hazard_polygons": [
-      {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              77.6902180863665,
-              12.765298750981966
-            ],
-            [
-              77.7142180863665,
-              12.765298750981966
-            ],
-            [
-              77.7166180863665,
-              12.741298750981965
-            ],
-            [
-              77.6902180863665,
-              12.743698750981965
-            ],
-            [
-              77.6902180863665,
-              12.765298750981966
-            ]
-          ]
-        ]
-      }
-    ]
-  },
-  {
-    "plan_id": "PLAN-FLOOD-362",
-    "created_at": "2026-11-01T14:50:34.392598+00:00",
-    "supplier_id": "supplier-electronic-city-01",
-    "commodity": "Drinking Water & Ready-to-Eat Meal Packs",
-    "quantity": 75,
-    "unit": "crates",
-    "origin": {
-      "latitude": 12.8442,
-      "longitude": 77.6648
-    },
-    "destination": {
-      "latitude": 12.797932872814258,
-      "longitude": 77.69684812902541
-    },
-    "status": "NEEDS_APPROVAL",
-    "approval_required": true,
-    "idempotency_key": "idemp-PLAN-FLOOD-362",
-    "hazard_assessment_id": "haz-PLAN-FLOOD-362",
-    "rationale": [
-      "Gen AI Ingestion: FLASH FLOOD INUNDATION detected.",
-      "Citizen reported: 25 affected in Chandapura Circle Basin.",
-      "Allocated: 75 crates of Drinking Water & Ready-to-Eat Meal Packs.",
-      "Modeled flood avoidance routing computed; operator approval gate triggered."
-    ],
-    "source_refs": [
-      {
-        "provider": "ReliefRoute Gen AI Reporting Bot & Open-Meteo",
-        "url": "https://api.open-meteo.com",
-        "retrieved_at": "2026-11-01T14:50:34.392841+00:00",
-        "stale": false,
-        "notes": "Natural language emergency ingestion"
-      }
-    ],
-    "route": {
-      "provider": "openrouteservice",
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [
-          [
-            77.6648,
-            12.8442
-          ],
-          [
-            77.67186062276876,
-            12.83392130441942
-          ],
-          [
-            77.68613224318106,
-            12.81410292773029
-          ],
-          [
-            77.69684812902541,
-            12.797932872814258
-          ]
-        ]
-      },
-      "distance_m": 15180,
-      "duration_s": 1518,
-      "avoids_requested_polygons": true,
-      "risk_level": "MODERATE",
-      "warnings": [
-        "Surface flood runoff detected near Chandapura Circle Basin"
-      ],
-      "source": {
-        "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T14:50:34.392846+00:00",
-        "stale": false
-      }
-    },
-    "hazard_polygons": [
-      {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              77.68484812902541,
-              12.809932872814258
-            ],
-            [
-              77.70884812902541,
-              12.809932872814258
-            ],
-            [
-              77.7112481290254,
-              12.785932872814257
-            ],
-            [
-              77.68484812902541,
-              12.788332872814257
-            ],
-            [
-              77.68484812902541,
-              12.809932872814258
-            ]
-          ]
-        ]
-      }
-    ]
-  },
-  {
     "plan_id": "PLAN-2024-001",
-    "created_at": "2026-11-01T14:00:00Z",
+    "created_at": "2026-11-01T19:00:00.000Z",
     "supplier_id": "supplier-electronic-city-01",
-    "commodity": "Drinking Water & Emergency Meal Packs",
-    "quantity": 450,
+    "commodity": "Emergency Drinking Water & Ready-to-Eat Meal Packs",
+    "quantity": 850,
     "unit": "crates",
     "origin": {
       "latitude": 12.8442,
@@ -319,17 +19,17 @@
     "idempotency_key": "idemp-plan-001",
     "hazard_assessment_id": "haz-001",
     "rationale": [
-      "Heavy precipitation (>45mm/hr) detected along Chandapura basin.",
-      "Rerouted via Hosur Rd primary arterial to circumvent flood polygon.",
-      "850 people affected \u2014 high priority dispatch authorized."
+      "Autonomous plan synthesized from verified citizen distress reports.",
+      "Primary route safely bypasses Muthanallur drainage basin with 1.8km clearance.",
+      "Approved by Human Operator (admin-01) and successfully dispatched via Telegram bot."
     ],
     "source_refs": [
       {
-        "provider": "Open-Meteo & CWC",
+        "provider": "Open-Meteo & Central Water Commission",
         "url": "https://api.open-meteo.com",
-        "retrieved_at": "2026-11-01T14:00:00Z",
+        "retrieved_at": "2026-11-01T19:00:00.000Z",
         "stale": false,
-        "notes": "Modeled flood risk"
+        "notes": "Real-time precipitation modeling (>45mm/hr)"
       }
     ],
     "route": {
@@ -340,6 +40,10 @@
           [
             77.6648,
             12.8442
+          ],
+          [
+            77.6715,
+            12.836
           ],
           [
             77.678,
@@ -355,16 +59,16 @@
           ]
         ]
       },
-      "distance_m": 12800,
-      "duration_s": 1350,
+      "distance_m": 14200,
+      "duration_s": 1320,
       "avoids_requested_polygons": true,
-      "risk_level": "MODERATE",
+      "risk_level": "LOW",
       "warnings": [
-        "Surface runoff advisory active near Chandapura basin"
+        "High traffic on elevated expressway bypass; hazard clearance confirmed"
       ],
       "source": {
         "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T14:00:00Z",
+        "retrieved_at": "2026-11-01T19:00:00.000Z",
         "stale": false
       }
     },
@@ -396,13 +100,25 @@
           ]
         ]
       }
-    ]
+    ],
+    "gen_ai_extraction": {
+      "emergency_type": "FLASH FLOOD & INUNDATION",
+      "requested_supplies": [
+        "Drinking Water Purification Units",
+        "Ready-to-Eat Emergency Meals",
+        "Trauma Kits"
+      ],
+      "extracted_location": "Chandapura Basin Relief Sector",
+      "original_message": "Water level crossed 1.5 meters near Chandapura circle! More than 800 citizens trapped in school building without food and potable water. Please send help!",
+      "confidence": 98.2,
+      "people_affected": 850
+    }
   },
   {
     "plan_id": "PLAN-2024-002",
-    "created_at": "2026-11-01T15:30:00Z",
+    "created_at": "2026-11-01T20:30:00.000Z",
     "supplier_id": "supplier-bommasandra-02",
-    "commodity": "Clothing & Thermal Blankets",
+    "commodity": "Thermal Blankets & Emergency Clothing Bundles",
     "quantity": 800,
     "unit": "bundles",
     "origin": {
@@ -418,11 +134,19 @@
     "idempotency_key": "idemp-plan-002",
     "hazard_assessment_id": "haz-002",
     "rationale": [
-      "Marsur village isolated \u2014 ground routes partially compromised.",
-      "340 people need clothing and shelter materials urgently.",
-      "Human approval required: route passes within 2km of hazard zone."
+      "CRITICAL HAZARD INTERSECTION: Shortest ground path intersects active 2.1m flood polygon.",
+      "Autonomous dispatch locked: human operator must review and confirm alternate detour.",
+      "Marsur village isolated with 340 individuals requiring immediate thermal protection."
     ],
-    "source_refs": [],
+    "source_refs": [
+      {
+        "provider": "Open-Meteo & Radar Hydrology",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T20:30:00.000Z",
+        "stale": false,
+        "notes": "Flash flood surge warning across Marsur drainage channel"
+      }
+    ],
     "route": {
       "provider": "openrouteservice",
       "geometry": {
@@ -451,12 +175,12 @@
       "avoids_requested_polygons": false,
       "risk_level": "HIGH",
       "warnings": [
-        "Route passes near active flood zone",
-        "Bridge condition at Marsur Road unverified"
+        "CRITICAL: Direct path crosses submerged 2.1m flood hazard zone near Marsur Road",
+        "Vehicle dispatch locked until human operator signs off on reroute"
       ],
       "source": {
         "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T15:30:00Z",
+        "retrieved_at": "2026-11-01T20:30:00.000Z",
         "stale": false
       }
     },
@@ -488,65 +212,98 @@
           ]
         ]
       }
-    ]
+    ],
+    "gen_ai_extraction": {
+      "emergency_type": "VILLAGE ISOLATION & FLOODING",
+      "requested_supplies": [
+        "Thermal Blankets",
+        "Clothing Bundles",
+        "Waterproof Tarpaulins"
+      ],
+      "extracted_location": "Marsur Village Centre (Anekal)",
+      "original_message": "Marsur village completely isolated, lake overflowed, houses submerged. 340 people cold and wet, please send blankets and clothing.",
+      "confidence": 95.2,
+      "people_affected": 340
+    }
   },
   {
     "plan_id": "PLAN-2024-003",
-    "created_at": "2026-11-01T17:00:00Z",
+    "created_at": "2026-11-01T21:45:00.000Z",
     "supplier_id": "supplier-hosur-medical-03",
-    "commodity": "Insulin & Medical Emergency Kits",
-    "quantity": 45,
+    "commodity": "Insulin (Rapid-Acting) & Emergency Trauma Kits",
+    "quantity": 60,
     "unit": "kits",
     "origin": {
-      "latitude": 12.74,
-      "longitude": 77.83
+      "latitude": 12.8442,
+      "longitude": 77.6648
     },
     "destination": {
-      "latitude": 12.775,
+      "latitude": 12.715,
       "longitude": 77.698
     },
-    "status": "NEEDS_APPROVAL",
+    "status": "PENDING_APPROVAL",
     "approval_required": true,
     "idempotency_key": "idemp-plan-003",
     "hazard_assessment_id": "haz-003",
     "rationale": [
-      "Medical emergency \u2014 diabetic patient identified in report.",
-      "Time-critical delivery, fastest route selected despite moderate risk.",
-      "Requires immediate approval to avoid medical deterioration."
+      "Life-critical medical emergency: AI obstacle avoidance rerouted through western Jigani corridor.",
+      "Route visibly arcs around Suragajakkanahalli-Karpur flood basin with 2.2km safety margin.",
+      "Zero intersection with active hazard polygons; ready for immediate operator authorization."
     ],
-    "source_refs": [],
+    "source_refs": [
+      {
+        "provider": "Open-Meteo & Health Crisis Response",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T21:45:00.000Z",
+        "stale": false,
+        "notes": "Time-critical delivery window < 90 mins"
+      }
+    ],
     "route": {
       "provider": "openrouteservice",
       "geometry": {
         "type": "LineString",
         "coordinates": [
           [
-            77.83,
-            12.74
+            77.6648,
+            12.8442
           ],
           [
-            77.78,
-            12.755
+            77.652,
+            12.818
           ],
           [
-            77.73,
-            12.768
+            77.648,
+            12.785
+          ],
+          [
+            77.653,
+            12.752
+          ],
+          [
+            77.665,
+            12.73
+          ],
+          [
+            77.685,
+            12.718
           ],
           [
             77.698,
-            12.775
+            12.715
           ]
         ]
       },
-      "distance_m: 15600, duration_s": 1800,
+      "distance_m": 16800,
+      "duration_s": 1540,
       "avoids_requested_polygons": true,
-      "risk_level": "MODERATE",
+      "risk_level": "LOW",
       "warnings": [
-        "Rain-slicked roads on Hosur highway stretch"
+        "Successfully routed via western Jigani bypass; all flood polygons avoided"
       ],
       "source": {
         "provider": "openrouteservice",
-        "retrieved_at": "2026-11-01T17:00:00Z",
+        "retrieved_at": "2026-11-01T21:45:00.000Z",
         "stale": false
       }
     },
@@ -556,28 +313,266 @@
         "coordinates": [
           [
             [
-              77.685,
-              12.785
+              77.68,
+              12.78
+            ],
+            [
+              77.712,
+              12.78
             ],
             [
               77.715,
-              12.785
+              12.745
             ],
             [
-              77.72,
-              12.765
+              77.682,
+              12.745
             ],
             [
-              77.69,
-              12.76
-            ],
-            [
-              77.685,
-              12.785
+              77.68,
+              12.78
             ]
           ]
         ]
       }
-    ]
+    ],
+    "gen_ai_extraction": {
+      "emergency_type": "CRITICAL MEDICAL EMERGENCY",
+      "requested_supplies": [
+        "Rapid-Acting Insulin Vials",
+        "Syringes & Glucometers",
+        "Sterile Trauma Kits"
+      ],
+      "extracted_location": "Anekal South Relief Sector",
+      "original_message": "Urgent SOS: Multiple elderly diabetes patients trapped at Anekal South shelter without insulin for 18 hours. Blood sugar spiking dangerously, need insulin kits immediately!",
+      "confidence": 99.1,
+      "people_affected": 120
+    }
+  },
+  {
+    "plan_id": "PLAN-2024-004",
+    "created_at": "2026-11-01T22:15:00.000Z",
+    "supplier_id": "supplier-electronic-city-01",
+    "commodity": "Water Purification Drops & High-Calorie Rations",
+    "quantity": 500,
+    "unit": "crates",
+    "origin": {
+      "latitude": 12.8442,
+      "longitude": 77.6648
+    },
+    "destination": {
+      "latitude": 12.822,
+      "longitude": 77.728
+    },
+    "status": "NEEDS_APPROVAL",
+    "approval_required": true,
+    "idempotency_key": "idemp-plan-004",
+    "hazard_assessment_id": "haz-004",
+    "rationale": [
+      "Muthanallur Lake bund overflow reported across 14 independent citizen Telegram alerts.",
+      "Drinking water contamination risk: route scheduled along northern elevated perimeter.",
+      "Human validation required to confirm northern bridge structural capacity."
+    ],
+    "source_refs": [
+      {
+        "provider": "Open-Meteo & Central Water Commission",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T22:15:00.000Z",
+        "stale": false,
+        "notes": "Lake water level +0.9m above crest"
+      }
+    ],
+    "route": {
+      "provider": "openrouteservice",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.6648,
+            12.8442
+          ],
+          [
+            77.685,
+            12.839
+          ],
+          [
+            77.705,
+            12.831
+          ],
+          [
+            77.728,
+            12.822
+          ]
+        ]
+      },
+      "distance_m": 8900,
+      "duration_s": 980,
+      "avoids_requested_polygons": true,
+      "risk_level": "MODERATE",
+      "warnings": [
+        "Minor water runoff along Muthanallur approach road"
+      ],
+      "source": {
+        "provider": "openrouteservice",
+        "retrieved_at": "2026-11-01T22:15:00.000Z",
+        "stale": false
+      }
+    },
+    "hazard_polygons": [
+      {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.715,
+              12.835
+            ],
+            [
+              77.745,
+              12.835
+            ],
+            [
+              77.75,
+              12.81
+            ],
+            [
+              77.72,
+              12.805
+            ],
+            [
+              77.715,
+              12.835
+            ]
+          ]
+        ]
+      }
+    ],
+    "gen_ai_extraction": {
+      "emergency_type": "LAKE OVERFLOW & DRINKING WATER CONTAMINATION",
+      "requested_supplies": [
+        "Chlorine Tablets & Purification Kits",
+        "Clean Bottled Water",
+        "ORS Hydration Sachets"
+      ],
+      "extracted_location": "Muthanallur Lake Periphery (Anekal East)",
+      "original_message": "Muthanallur lake has breached its bund! Contaminated flood water entered village open wells. Over 250 villagers have no drinking water since morning.",
+      "confidence": 96.3,
+      "people_affected": 260
+    }
+  },
+  {
+    "plan_id": "PLAN-2024-005",
+    "created_at": "2026-11-01T22:40:00.000Z",
+    "supplier_id": "supplier-bommasandra-02",
+    "commodity": "Inflatable Rescue Rafts & Maternal Emergency Delivery Packs",
+    "quantity": 25,
+    "unit": "units",
+    "origin": {
+      "latitude": 12.836,
+      "longitude": 77.6715
+    },
+    "destination": {
+      "latitude": 12.86,
+      "longitude": 77.785
+    },
+    "status": "NEEDS_APPROVAL",
+    "approval_required": true,
+    "idempotency_key": "idemp-plan-005",
+    "hazard_assessment_id": "haz-005",
+    "rationale": [
+      "Urgent maternal evacuation: 3 pregnant women stranded on building rooftops.",
+      "Route utilizes Sarjapur-Attibele ridge road with inflatable rescue raft transport.",
+      "Operator authorization requested to initiate combined 4x4 and motorized raft deployment."
+    ],
+    "source_refs": [
+      {
+        "provider": "Open-Meteo & NDMA District Advisory",
+        "url": "https://api.open-meteo.com",
+        "retrieved_at": "2026-11-01T22:40:00.000Z",
+        "stale": false,
+        "notes": "Heavy thunderstorm over Sarjapur basin"
+      }
+    ],
+    "route": {
+      "provider": "openrouteservice",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            77.6715,
+            12.836
+          ],
+          [
+            77.702,
+            12.845
+          ],
+          [
+            77.738,
+            12.852
+          ],
+          [
+            77.765,
+            12.857
+          ],
+          [
+            77.785,
+            12.86
+          ]
+        ]
+      },
+      "distance_m": 16800,
+      "duration_s": 1720,
+      "avoids_requested_polygons": true,
+      "risk_level": "MODERATE",
+      "warnings": [
+        "Heavy surface pooling along Attibele-Sarjapur link road"
+      ],
+      "source": {
+        "provider": "openrouteservice",
+        "retrieved_at": "2026-11-01T22:40:00.000Z",
+        "stale": false
+      }
+    },
+    "hazard_polygons": [
+      {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.76,
+              12.875
+            ],
+            [
+              77.805,
+              12.875
+            ],
+            [
+              77.81,
+              12.845
+            ],
+            [
+              77.765,
+              12.84
+            ],
+            [
+              77.76,
+              12.875
+            ]
+          ]
+        ]
+      }
+    ],
+    "gen_ai_extraction": {
+      "emergency_type": "ISOLATED HAMLET & MATERNAL MEDICAL DISTRESS",
+      "requested_supplies": [
+        "Inflatable Rescue Rafts",
+        "Maternal Delivery Kits",
+        "Sterile Baby Warmers"
+      ],
+      "extracted_location": "Sarjapur Lowland Settlement (Sector 4)",
+      "original_message": "Emergency at Sarjapur lowland hamlet: 3 pregnant women and 40 children stranded on rooftops with water at 1.8m. Need inflatable rescue rafts and maternal kits urgently!",
+      "confidence": 98.7,
+      "people_affected": 180
+    }
   }
 ]
