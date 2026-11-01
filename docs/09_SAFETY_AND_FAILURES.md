@@ -20,11 +20,11 @@ Forbidden: “guaranteed safe”; “road is open” without a current authorita
 - Weather timeout: retry twice; then mark degraded and do not present old forecast as live.
 - Routing timeout/rate limit: retry within provider limits; otherwise no dispatch for a route-dependent plan.
 - Supplier unavailable: return no eligible supplier; do not invent a fallback.
-- Telegram send failure: record FAILED; don't claim sent.
-- Telegram send timeout: check stored idempotency/update state before retry to avoid duplicates.
+- Telegram definitive rejection: record FAILED, restore the plan to APPROVED, and allow a deliberate retry with a new idempotency key.
+- Telegram timeout or malformed response: retain an unresolved SENDING attempt and DISPATCHING plan; reconcile with Telegram before manual recovery, and never retry automatically.
 - No driver acknowledgement: mark `SENT_UNACKNOWLEDGED`; notify operator and ask for manual follow-up.
 - GPS stale: display last timestamp and stale flag; do not treat it as live.
-- Agent crash: persist plan/action state so restart does not repeat a dispatch.
+- Agent crash: persist reservation state so restart does not repeat a dispatch; reconcile a stranded SENDING attempt before manual recovery.
 - Invalid polygon: reject or mark assessment unusable; never pass malformed geometry to routing.
 
 ## Audit requirements

@@ -25,7 +25,7 @@ async def latest_location(driver_id: str) -> DriverLocation | None: ...
 async def create_plan(*, supplier: Supplier, inventory: InventoryItem, origin: LatLon, destination: LatLon, hazard: HazardAssessment) -> DeliveryPlan: ...
 async def decide(request: ApprovalRequest) -> DeliveryPlan: ...
 async def dispatch(request: DispatchRequest) -> DispatchResult: ...
-async def record_acknowledgement(ack: DriverAcknowledgement) -> AuditEvent: ...
+async def record_acknowledgement(ack: DriverAcknowledgement) -> bool: ...
 async def append(event: AuditEvent) -> None: ...
 ```
 
@@ -42,16 +42,18 @@ The actual Pydantic fields are authoritative in `shared/models.py`. Do not creat
 - `RouteResult`: provider, optional GeoJSON geometry, distance metres, duration seconds, whether polygon avoidance was requested/confirmed, risk level, warnings, source.
 - `DeliveryPlan`: supplier, requested goods, endpoints, route, hazard assessment ID, status, approval flag, idempotency key, rationale and sources.
 - `ApprovalRequest`: plan ID, decision, approver ID, optional comment, timestamp.
-- `DispatchRequest`: plan ID, driver ID, message, idempotency key.
+- `DispatchRequest`: plan ID, driver ID, optional Telegram chat ID, message, idempotency key.
 - `DispatchResult`: dispatch ID, plan ID, provider message ID, SENT/FAILED status and optional error.
 - `DriverAcknowledgement`: plan ID, driver ID, acknowledged flag, timestamp and message.
 - `AuditEvent`: actor, action, entity, outcome, details and source references.
 
 ## Idempotency
 - Every plan has a stable unique `idempotency_key`; repeated requests with the same key return the existing plan.
-- Every dispatch request has a unique key. Retrying after timeout must first query existing dispatch status; do not send duplicate messages blindly.
+- Every dispatch request has a unique key and is reserved atomically before sending. A confirmed retry returns the saved result; an in-progress or unresolved request is never sent again automatically.
+- Definite Telegram rejection records `FAILED` and releases the plan to `APPROVED`, allowing an operator retry with a new key. A timeout or malformed response leaves the attempt unresolved; reconcile delivery with Telegram before any manual recovery.
 - Approval decisions must record approver identity and time.
 - A Telegram callback/update ID should be stored to prevent duplicate processing.
+- Driver acknowledgement is accepted only for a confirmed dispatch to that driver. Identical acknowledgement retries do not duplicate audit events; `IN_TRANSIT` remains `IN_TRANSIT`.
 
 ## Error handling
 Use `shared.enums.ErrorCode` and `shared.errors.ReliefRouteError`.

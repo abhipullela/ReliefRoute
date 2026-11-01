@@ -23,6 +23,10 @@ uvicorn api.main:app --reload
 - [ ] Candidate route warnings and limitations are visible.
 - [ ] Dispatch before approval is rejected.
 - [ ] Duplicate dispatch request is idempotent.
+- [ ] Concurrent approval and dispatch requests cannot duplicate state transitions or sends.
+- [ ] Telegram rejection, timeout, and malformed responses do not falsely report successful delivery.
+- [ ] Citizen reports persist with idempotent submissions and consent-gated AI triage.
+- [ ] AI failures remain explicit; AI classifications always require human review.
 - [ ] Telegram message sent is not confused with acknowledgement.
 - [ ] Missing/failed provider results in explicit degraded state.
 - [ ] No credentials or personal data are committed.

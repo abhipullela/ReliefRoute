@@ -1,14 +1,22 @@
-\"\"\"Public Python interface signatures. Implementations belong to services/ or agent/.
-
-Services should raise ReliefRouteError for expected operational failures. Do not return fake
-success values. All times must be timezone-aware. Internal coordinates use named LatLon fields.
-\"\"\"
 from typing import Protocol
+
 from shared.models import (
-    WeatherObservation, LatLon, HazardAssessment, RouteRequest, RouteResult,
-    Supplier, InventoryItem, DriverLocation, DeliveryPlan, ApprovalRequest,
-    DispatchRequest, DispatchResult, DriverAcknowledgement, AuditEvent,
+    ApprovalRequest,
+    AuditEvent,
+    DeliveryPlan,
+    DispatchRequest,
+    DispatchResult,
+    DriverAcknowledgement,
+    DriverLocation,
+    HazardAssessment,
+    InventoryItem,
+    LatLon,
+    RouteRequest,
+    RouteResult,
+    Supplier,
+    WeatherObservation,
 )
+
 
 class WeatherService(Protocol):
     async def get_forecast(self, location: LatLon, *, horizon_hours: int = 3) -> list[WeatherObservation]: ...
@@ -38,7 +46,7 @@ class ApprovalService(Protocol):
 
 class DispatchService(Protocol):
     async def dispatch(self, request: DispatchRequest) -> DispatchResult: ...
-    async def record_acknowledgement(self, ack: DriverAcknowledgement) -> AuditEvent: ...
+    async def record_acknowledgement(self, ack: DriverAcknowledgement) -> bool: ...
 
 class AuditService(Protocol):
     async def append(self, event: AuditEvent) -> None: ...
