@@ -6,15 +6,14 @@ Run from the repository root:
 """
 
 import asyncio
-from types import SimpleNamespace
 
 import httpx
 import pytest
 
-import services.weather as weather_module
 import services.routing as routing_module
-from services.weather import OpenMeteoWeatherService
+import services.weather as weather_module
 from services.routing import OSRMRoutingService
+from services.weather import OpenMeteoWeatherService
 from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import LatLon, RouteRequest

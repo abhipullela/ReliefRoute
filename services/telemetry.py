@@ -1,7 +1,7 @@
 """PostgreSQL-backed driver GPS ingestion and retrieval."""
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC
 
 import psycopg
 from dotenv import load_dotenv
@@ -76,7 +76,7 @@ class PostgreSQLTelemetryService:
                         location.driver_id,
                         location.location.latitude,
                         location.location.longitude,
-                        location.observed_at.astimezone(timezone.utc),
+                        location.observed_at.astimezone(UTC),
                         location.source,
                         location.accuracy_m,
                         location.consented,

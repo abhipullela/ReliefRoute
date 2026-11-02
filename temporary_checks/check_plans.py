@@ -3,20 +3,20 @@
 import asyncio
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psycopg
 from dotenv import load_dotenv
 
+from services.plans import PostgreSQLPlanningStore
 from shared.enums import PlanStatus, RiskLevel
 from shared.models import (
     DeliveryPlan,
+    HazardAssessment,
     LatLon,
     RouteResult,
     SourceRef,
-    HazardAssessment,
 )
-from services.plans import PostgreSQLPlanningStore
 
 load_dotenv()
 
@@ -31,7 +31,7 @@ async def main() -> None:
     plan_id = f"plan-test-{suffix}"
     idempotency_key = f"plan-test-key-{suffix}"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     source = SourceRef(
         provider="integration_test",
         retrieved_at=now,

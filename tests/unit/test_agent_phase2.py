@@ -10,8 +10,6 @@ Tests are grouped by concern:
 All Phase 1 tests remain unaffected.
 """
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -34,11 +32,8 @@ from shared.enums import ErrorCode, PlanStatus, RiskLevel
 from shared.errors import ReliefRouteError
 from shared.models import (
     ApprovalRequest,
-    AuditEvent,
     DeliveryPlan,
     DispatchResult,
-    HazardAssessment,
-    InventoryItem,
     LatLon,
     RouteResult,
     SourceRef,
@@ -51,7 +46,6 @@ from tests.conftest import (
     MockAuditService,
     MockDispatchService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -833,7 +827,6 @@ class TestPhase2Graph:
         """After planning+approval, a failing dispatch service terminates at DISPATCH_FAILED."""
         from agent.graph import create_agent_workflow
         from agent.state import create_initial_state
-        from shared.enums import PlanStatus
 
         # Fail all dispatch attempts
         errors = [

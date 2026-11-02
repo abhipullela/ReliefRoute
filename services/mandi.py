@@ -11,10 +11,10 @@ contract. Treat response-shape changes as INVALID_UPSTREAM_RESPONSE.
 from __future__ import annotations
 
 import asyncio
-import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Any, Mapping
+from datetime import UTC, date, datetime
+from typing import Any
 
 import httpx
 
@@ -25,7 +25,6 @@ AGMARKNET_URL = (
     "https://api.agmarknet.gov.in/v1/"
     "price-trend/wholesale-arrivals-monthly"
 )
-from datetime import datetime
 
 AGMARKNET_BASE_URL = "https://api.agmarknet.gov.in/v1"
 AGMARKNET_PROVIDER = "Agmarknet 2.0"
@@ -100,8 +99,6 @@ _UNIT_KEYS = ("arrival_unit", "arrivalUnit", "unit", "unit_name", "quantity_unit
 #     retrieved_at: datetime
 #     observed_at: datetime | None
 
-from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -124,7 +121,6 @@ class MandiArrivalObservation:
     source_url: str = ""
     retrieved_at: datetime | None = None
 
-from datetime import datetime
 
 
 def parse_monthly_arrivals(
@@ -328,7 +324,7 @@ class AgmarknetMandiService:
             "commodityId": commodity_id,
         }
         payload = await self._fetch(url, params)
-        retrieved_at = datetime.now(timezone.utc)
+        retrieved_at = datetime.now(UTC)
 
         try:
             records = _extract_records(payload)
@@ -368,7 +364,7 @@ class AgmarknetMandiService:
                         source_url=url,
                         retrieved_at=retrieved_at,
                         observed_at=datetime.combine(
-                            parsed_date, datetime.min.time(), tzinfo=timezone.utc
+                            parsed_date, datetime.min.time(), tzinfo=UTC
                         ),
                     )
                 )

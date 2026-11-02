@@ -4,11 +4,13 @@ import asyncio
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psycopg
 from dotenv import load_dotenv
 
+from services.audit import PostgreSQLAuditService
+from services.dispatch import PostgreSQLDispatchService
 from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import (
@@ -16,8 +18,6 @@ from shared.models import (
     DispatchRequest,
     DriverAcknowledgement,
 )
-from services.dispatch import PostgreSQLDispatchService
-from services.audit import PostgreSQLAuditService
 
 load_dotenv()
 
@@ -88,7 +88,7 @@ async def main() -> None:
             plan_id=plan_id,
             driver_id=driver_id,
             acknowledged=False,
-            received_at=datetime.now(timezone.utc),
+            received_at=datetime.now(UTC),
             message="Integration test acknowledgement.",
         )
         await dispatch_service.record_acknowledgement(acknowledgement)

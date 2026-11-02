@@ -23,6 +23,7 @@ from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import (
     ApprovalRequest,
+    AuditEvent,
     CitizenReport,
     CitizenReportSubmission,
     ContractModel,
@@ -236,7 +237,18 @@ async def latest_driver_location(driver_id: str):
         _raise_http_error(exc)
 
 
+@app.get("/plans", response_model=list[DeliveryPlan])
+@app.get("/api/plans", response_model=list[DeliveryPlan])
+async def list_plans(limit: int = Query(default=50, ge=1, le=100)):
+    service = _service_or_503(app.state.plans, "Planning store")
+    try:
+        return await service.list_plans(limit=limit)
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
 @app.get("/plans/{plan_id}", response_model=DeliveryPlan)
+@app.get("/api/plans/{plan_id}", response_model=DeliveryPlan)
 async def get_plan(plan_id: str):
     service = _service_or_503(app.state.plans, "Planning store")
     try:
@@ -248,8 +260,48 @@ async def get_plan(plan_id: str):
         _raise_http_error(exc)
 
 
+@app.get("/flood-areas")
+@app.get("/api/flood-areas")
+async def list_flood_areas():
+    """Derive active flood areas from stored plans."""
+    service = _service_or_503(app.state.plans, "Planning store")
+    try:
+        plans = await service.list_plans(limit=50)
+        areas = []
+        for p in plans:
+            risk = p.route.risk_level if p.route else "MODERATE"
+            areas.append({
+                "plan_id": p.plan_id,
+                "name": p.rationale[0] if p.rationale else f"Emergency Relief Corridor ({p.plan_id})",
+                "coordinates": [p.destination.longitude, p.destination.latitude],
+                "severity": "CRITICAL" if risk == "HIGH" else "HIGH",
+                "water_level": "Active Flood Water Inundation",
+                "commodity": f"{p.quantity} {p.unit} of {p.commodity}",
+                "status": p.status.value,
+                "people_affected": p.gen_ai_extraction.people_affected if p.gen_ai_extraction else 35,
+            })
+        return areas
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
+@app.get("/audit-events", response_model=list[AuditEvent])
+@app.get("/api/audit-events", response_model=list[AuditEvent])
+async def list_audit_events(entity_id: str = Query(...)):
+    service = _service_or_503(app.state.audit, "Audit service")
+    try:
+        return await service.list_by_entity(entity_id=entity_id)
+    except ReliefRouteError as exc:
+        _raise_http_error(exc)
+
+
 @app.post(
     "/citizen-reports",
+    response_model=CitizenReport,
+    status_code=201,
+)
+@app.post(
+    "/api/citizen-reports",
     response_model=CitizenReport,
     status_code=201,
 )
@@ -265,6 +317,7 @@ async def submit_citizen_report(body: CitizenReportSubmission):
 
 
 @app.get("/citizen-reports", response_model=list[CitizenReport])
+@app.get("/api/citizen-reports", response_model=list[CitizenReport])
 async def list_citizen_reports(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -285,6 +338,7 @@ async def list_citizen_reports(
 
 
 @app.get("/citizen-reports/{report_id}", response_model=CitizenReport)
+@app.get("/api/citizen-reports/{report_id}", response_model=CitizenReport)
 async def get_citizen_report(report_id: str):
     store = _service_or_503(
         getattr(app.state, "citizen_report_store", None),
@@ -304,6 +358,7 @@ async def get_citizen_report(report_id: str):
 
 
 @app.post("/citizen-reports/{report_id}/triage", response_model=CitizenReport)
+@app.post("/api/citizen-reports/{report_id}/triage", response_model=CitizenReport)
 async def retriage_citizen_report(report_id: str):
     agent = _service_or_503(
         getattr(app.state, "citizen_report_agent", None),
@@ -316,6 +371,7 @@ async def retriage_citizen_report(report_id: str):
 
 
 @app.post("/plans/{plan_id}/approval", response_model=DeliveryPlan)
+@app.post("/api/plans/{plan_id}/approval", response_model=DeliveryPlan)
 async def decide_plan(plan_id: str, body: ApprovalDecisionBody):
     workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
     request = ApprovalRequest(plan_id=plan_id, **body.model_dump())
@@ -326,6 +382,7 @@ async def decide_plan(plan_id: str, body: ApprovalDecisionBody):
 
 
 @app.post("/plans/{plan_id}/dispatch", response_model=DispatchResult)
+@app.post("/api/plans/{plan_id}/dispatch", response_model=DispatchResult)
 async def dispatch_plan(plan_id: str, body: DispatchBody):
     workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
     request = DispatchRequest(plan_id=plan_id, **body.model_dump())
@@ -339,6 +396,7 @@ async def dispatch_plan(plan_id: str, body: DispatchBody):
 
 
 @app.post("/plans/{plan_id}/acknowledgement", response_model=DriverAcknowledgement)
+@app.post("/api/plans/{plan_id}/acknowledgement", response_model=DriverAcknowledgement)
 async def acknowledge_dispatch(plan_id: str, body: AcknowledgementBody):
     workflow = _service_or_503(getattr(app.state, "approval_workflow", None), "Approval workflow")
     request = DriverAcknowledgement(plan_id=plan_id, **body.model_dump())

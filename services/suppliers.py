@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
@@ -78,10 +77,9 @@ class PostgreSQLSupplierService:
             async with await psycopg.AsyncConnection.connect(
                 self.database_url,
                 row_factory=dict_row,
-            ) as connection:
-                async with connection.cursor() as cursor:
-                    await cursor.execute(query, values)
-                    row = await cursor.fetchone()
+            ) as connection, connection.cursor() as cursor:
+                await cursor.execute(query, values)
+                row = await cursor.fetchone()
 
             return self._supplier_from_row(row)
 
@@ -150,10 +148,9 @@ class PostgreSQLSupplierService:
             async with await psycopg.AsyncConnection.connect(
                 self.database_url,
                 row_factory=dict_row,
-            ) as connection:
-                async with connection.cursor() as cursor:
-                    await cursor.execute(query, values)
-                    row = await cursor.fetchone()
+            ) as connection, connection.cursor() as cursor:
+                await cursor.execute(query, values)
+                row = await cursor.fetchone()
 
             if row is None:
                 raise ReliefRouteError(
@@ -243,10 +240,9 @@ class PostgreSQLSupplierService:
             async with await psycopg.AsyncConnection.connect(
                 self.database_url,
                 row_factory=dict_row,
-            ) as connection:
-                async with connection.cursor() as cursor:
-                    await cursor.execute(query, (commodity.strip(), min_quantity))
-                    rows = await cursor.fetchall()
+            ) as connection, connection.cursor() as cursor:
+                await cursor.execute(query, (commodity.strip(), min_quantity))
+                rows = await cursor.fetchall()
 
             results: list[tuple[Supplier, InventoryItem]] = []
 

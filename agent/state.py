@@ -7,21 +7,21 @@ from pydantic import Field
 
 from shared.models import (
     ApprovalRequest,
+    CitizenReport,
     ContractModel,
     DeliveryPlan,
     DispatchResult,
+    ExtractedEmergencyReport,
     HazardAssessment,
     InventoryItem,
     LatLon,
+    ReportExtractionMetadata,
+    ReportValidationResult,
     RouteResult,
     SourceRef,
     Supplier,
     WeatherObservation,
     utc_now,
-    CitizenReport,
-    ExtractedEmergencyReport,
-    ReportExtractionMetadata,
-    ReportValidationResult, 
 )
 
 

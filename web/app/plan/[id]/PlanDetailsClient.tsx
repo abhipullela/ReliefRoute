@@ -4,7 +4,7 @@
 // Integrates MapView (route line + hazard polygons), ApprovalPanel, DispatchPanel, and AuditTrail.
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft,
@@ -63,6 +63,10 @@ interface PlanDetailsClientProps {
 
 export default function PlanDetailsClient({ planId }: PlanDetailsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("mode") || "live";
+  const isDemo = mode === "demo";
+
   const [plan, setPlan] = useState<DeliveryPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -75,7 +79,7 @@ export default function PlanDetailsClient({ planId }: PlanDetailsClientProps) {
       if (!silent) setIsLoading(true);
       setIsRefreshing(true);
       try {
-        const fetched = await getPlan(planId);
+        const fetched = await getPlan(planId, isDemo);
         setPlan(fetched);
         setFetchError(null);
       } catch (err: unknown) {
@@ -87,12 +91,12 @@ export default function PlanDetailsClient({ planId }: PlanDetailsClientProps) {
         setIsRefreshing(false);
       }
     },
-    [planId, handleApiError]
+    [planId, isDemo, handleApiError]
   );
 
   useEffect(() => {
     let isCancelled = false;
-    getPlan(planId)
+    getPlan(planId, isDemo)
       .then((fetched) => {
         if (!isCancelled) {
           setPlan(fetched);
@@ -110,7 +114,7 @@ export default function PlanDetailsClient({ planId }: PlanDetailsClientProps) {
     return () => {
       isCancelled = true;
     };
-  }, [planId]);
+  }, [planId, isDemo]);
 
   const handlePlanUpdate = useCallback((updated: DeliveryPlan) => {
     setPlan(updated);
@@ -211,7 +215,7 @@ export default function PlanDetailsClient({ planId }: PlanDetailsClientProps) {
         <div className="flex items-center gap-3 min-w-0">
           {/* Back to Map button */}
           <button
-            onClick={() => router.push("/map")}
+            onClick={() => router.push(`/map?mode=${isDemo ? "demo" : "live"}`)}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 transition-all cursor-pointer shadow-sm shrink-0"
           >
             <ArrowLeft className="h-4 w-4 text-indigo-400" />

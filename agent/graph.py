@@ -7,30 +7,32 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agent.nodes import (
-approval_pending_node,
-assess_node,
-await_approval_node,
-completed_node,
-dispatch_failed_node,
-dispatch_node,
-execute_node,
-extract_report_node,
-monitor_node,
-needs_info_node,
-plan_node,
-planning_failure_node,
-planning_success_node,
-rejected_node,
-replan_node,
-route_after_approval,
-route_after_dispatch,
-route_after_validation,
-route_after_verify,
-validate_node,
-validate_report_node,
+    approval_pending_node,
+    assess_node,
+    await_approval_node,
+    completed_node,
+    dispatch_failed_node,
+    dispatch_node,
+    execute_node,
+    extract_report_node,
+    monitor_node,
+    needs_info_node,
+    plan_node,
+    planning_failure_node,
+    planning_success_node,
+    rejected_node,
+    replan_node,
+    route_after_approval,
+    route_after_dispatch,
+    route_after_validation,
+    route_after_verify,
+    validate_node,
+    validate_report_node,
 )
 from agent.services import AgentServices
 from agent.state import AgentState
+
+
 def route_after_report_validation(state: AgentState) -> str:
     if state.get("workflow_status") == "FAILED":
         return "failed"

@@ -258,77 +258,87 @@ async function tryFetch<T>(primaryPath: string, altPath?: string, options?: Requ
 }
 
 // -------------------------------------------------------------------------
-// Public API Functions (Real API First -> MockData Fallback)
+// Public API Functions (Bifurcated: Live Backend vs. Demo Mock Mode)
 // -------------------------------------------------------------------------
 
 /**
  * Fetch all active delivery plans.
- * Tries FastAPI backend GET /plans (or /api/v1/plans), falls back to MOCK_PLANS.
+ * If isDemo is true, returns curated mock scenario plans immediately.
+ * If isDemo is false, queries the live FastAPI backend at API_BASE_URL.
  */
-export async function getActivePlans(): Promise<DeliveryPlan[]> {
+export async function getActivePlans(isDemo: boolean = false): Promise<DeliveryPlan[]> {
+  if (isDemo) {
+    console.info("[API:Demo] Using curated scenario delivery plans.");
+    return structuredClone(MOCK_PLANS);
+  }
+
   try {
-    const data = await tryFetch<DeliveryPlan[]>("/plans", "/api/v1/plans");
+    console.info(`[API:Live] Fetching active plans from ${API_BASE_URL}/api/plans...`);
+    const data = await tryFetch<DeliveryPlan[]>("/api/plans", "/plans");
     if (Array.isArray(data) && data.length > 0) {
       data.forEach((p: DeliveryPlan) => {
         localPlanStore.set(p.plan_id.toLowerCase(), p);
       });
       return data;
     }
-    return structuredClone(MOCK_PLANS);
+    return [];
   } catch (err) {
     console.warn(
-      `[API] Failed to fetch active plans from live backend (${API_BASE_URL}), using mockData fallback:`,
+      `[API:Live] Live backend (${API_BASE_URL}) returned no active plans or is unreachable:`,
       err
     );
-    return structuredClone(MOCK_PLANS);
+    // In live mode, return empty list to reflect real backend state
+    return [];
   }
 }
+
+// Export alias for callers using fetchActivePlans
+export const fetchActivePlans = getActivePlans;
 
 /**
  * Fetch active flood areas for the map view.
- * Tries FastAPI backend GET /flood-areas, falls back to ACTIVE_FLOOD_AREAS.
+ * If isDemo is true, returns curated mock flood areas.
+ * If isDemo is false, attempts live fetch or derives from live active plans.
  */
-export async function getActiveFloodAreas(): Promise<ActiveFloodArea[]> {
+export async function getActiveFloodAreas(isDemo: boolean = false): Promise<ActiveFloodArea[]> {
+  if (isDemo) {
+    console.info("[API:Demo] Using curated scenario flood areas.");
+    return structuredClone(ACTIVE_FLOOD_AREAS);
+  }
+
   try {
-    const data = await tryFetch<ActiveFloodArea[]>("/flood-areas", "/api/v1/flood-areas");
+    console.info(`[API:Live] Fetching live flood areas from ${API_BASE_URL}/api/flood-areas...`);
+    const data = await tryFetch<ActiveFloodArea[]>("/api/flood-areas", "/flood-areas");
     if (Array.isArray(data) && data.length > 0) {
       return data;
     }
-    return structuredClone(ACTIVE_FLOOD_AREAS);
+    return [];
   } catch (err) {
     console.warn(
-      `[API] Failed to fetch active flood areas from live backend (${API_BASE_URL}), using mockData fallback:`,
+      `[API:Live] Live flood areas unavailable from backend (${API_BASE_URL}):`,
       err
     );
-    return structuredClone(ACTIVE_FLOOD_AREAS);
+    return [];
   }
 }
 
+// Export alias for callers using fetchActiveFloodAreas
+export const fetchActiveFloodAreas = getActiveFloodAreas;
+
 /**
  * Fetch a specific DeliveryPlan by ID.
- * Tries FastAPI backend GET /plans/{planId}, falls back to mockData.
+ * If isDemo is true, looks up the plan from mock scenarios or local store.
+ * If isDemo is false, queries the live FastAPI backend.
  */
-export async function getPlan(planId: string): Promise<DeliveryPlan> {
+export async function getPlan(planId: string, isDemo: boolean = false): Promise<DeliveryPlan> {
   const normalized = planId.trim().toLowerCase();
 
-  // 1. Try real live FastAPI backend
-  try {
-    const encoded = encodeURIComponent(planId);
-    const plan = await tryFetch<DeliveryPlan>(`/plans/${encoded}`, `/api/v1/plans/${encoded}`);
-    localPlanStore.set(normalized, plan);
-    return plan;
-  } catch (err) {
-    console.warn(
-      `[API] Failed to fetch plan "${planId}" from live backend (${API_BASE_URL}), using mockData fallback:`,
-      err
-    );
-
-    // 2. Fallback: check in-memory cached store
+  // 1. Demo Mode: return curated scenario mock data
+  if (isDemo) {
     if (localPlanStore.has(normalized)) {
       return structuredClone(localPlanStore.get(normalized)!);
     }
 
-    // 3. Fallback: check MOCK_PLANS list
     const foundMock = MOCK_PLANS.find(
       (p) => p.plan_id.toLowerCase() === normalized
     );
@@ -337,7 +347,6 @@ export async function getPlan(planId: string): Promise<DeliveryPlan> {
       return structuredClone(foundMock);
     }
 
-    // 4. Fallback: check localStorage for plans dispatched or approved during session
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem(`reliefroute_plan_${normalized}`);
@@ -351,68 +360,39 @@ export async function getPlan(planId: string): Promise<DeliveryPlan> {
       }
     }
 
-    // 5. Fallback: check /data/active_plans.json if populated
-    if (typeof window !== "undefined") {
-      try {
-        const resp = await fetch("/data/active_plans.json");
-        if (resp.ok) {
-          const plans: DeliveryPlan[] = await resp.json();
-          const found = plans.find(
-            (p) => p.plan_id.toLowerCase() === normalized
-          );
-          if (found) {
-            localPlanStore.set(normalized, found);
-            return structuredClone(found);
-          }
-        }
-      } catch {
-        // Ignore fetch error
-      }
-    }
-
-    // 6. Failsafe: synthesize realistic emergency plan
     const synthesized = synthesizePlan(planId);
     localPlanStore.set(normalized, synthesized);
     return structuredClone(synthesized);
+  }
+
+  // 2. Live Mode: Query FastAPI backend GET /api/plans/{id}
+  try {
+    const encoded = encodeURIComponent(planId);
+    const plan = await tryFetch<DeliveryPlan>(`/api/plans/${encoded}`, `/plans/${encoded}`);
+    localPlanStore.set(normalized, plan);
+    return plan;
+  } catch (err) {
+    console.error(
+      `[API:Live] Failed to fetch plan "${planId}" from live backend (${API_BASE_URL}):`,
+      err
+    );
+    throw err;
   }
 }
 
 /**
  * POST approval or rejection for a delivery plan.
- * Tries FastAPI backend POST /plans/{planId}/approval, falls back to local update.
+ * If isDemo is true, updates local fallback store and localStorage.
+ * If isDemo is false, posts to live FastAPI backend POST /api/plans/{planId}/approval.
  */
 export async function approvePlan(
   planId: string,
-  request: ApprovalRequest
+  request: ApprovalRequest,
+  isDemo: boolean = false
 ): Promise<DeliveryPlan> {
   const normalized = planId.trim().toLowerCase();
 
-  try {
-    const encoded = encodeURIComponent(planId);
-    const bodyPayload = JSON.stringify({
-      approved: request.approved,
-      approver_id: request.approver_id || "operator-01",
-      comment: request.comment ?? "Operator decision",
-      decided_at: request.decided_at || new Date().toISOString(),
-    });
-
-    const updated = await tryFetch<DeliveryPlan>(
-      `/plans/${encoded}/approval`,
-      `/api/v1/plans/${encoded}/approval`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: bodyPayload,
-      }
-    );
-    localPlanStore.set(normalized, updated);
-    return updated;
-  } catch (err) {
-    console.warn(
-      `[API] Failed to post approval for plan "${planId}" to live backend (${API_BASE_URL}), updating local fallback state:`,
-      err
-    );
-
+  if (isDemo) {
     const current =
       localPlanStore.get(normalized) ??
       MOCK_PLANS.find((p) => p.plan_id.toLowerCase() === normalized) ??
@@ -437,48 +417,42 @@ export async function approvePlan(
 
     return structuredClone(updated);
   }
+
+  // Live Mode: POST /api/plans/{plan_id}/approval
+  const encoded = encodeURIComponent(planId);
+  const bodyPayload = JSON.stringify({
+    approved: request.approved,
+    approver_id: request.approver_id || "operator-01",
+    comment: request.comment ?? "Operator decision",
+    decided_at: request.decided_at || new Date().toISOString(),
+  });
+
+  const updated = await tryFetch<DeliveryPlan>(
+    `/api/plans/${encoded}/approval`,
+    `/plans/${encoded}/approval`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyPayload,
+    }
+  );
+  localPlanStore.set(normalized, updated);
+  return updated;
 }
 
 /**
  * POST driver dispatch instruction for an approved plan.
- * Tries FastAPI backend POST /plans/{planId}/dispatch, falls back to mock response.
+ * If isDemo is true, simulates dispatch result and updates local store.
+ * If isDemo is false, posts to live FastAPI backend POST /api/plans/{planId}/dispatch.
  */
 export async function dispatchPlan(
   planId: string,
-  request: DispatchRequest
+  request: DispatchRequest,
+  isDemo: boolean = false
 ): Promise<DispatchResult> {
   const normalized = planId.trim().toLowerCase();
 
-  try {
-    const encoded = encodeURIComponent(planId);
-    const bodyPayload = JSON.stringify({
-      driver_id: request.driver_id || "driver-default-01",
-      message: request.message || `Emergency dispatch for plan ${planId}`,
-      idempotency_key: request.idempotency_key || `idemp-${planId}-${Date.now()}`,
-    });
-
-    const result = await tryFetch<DispatchResult>(
-      `/plans/${encoded}/dispatch`,
-      `/api/v1/plans/${encoded}/dispatch`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: bodyPayload,
-      }
-    );
-
-    const current = localPlanStore.get(normalized);
-    if (current) {
-      current.status = "DISPATCHED";
-      localPlanStore.set(normalized, current);
-    }
-    return result;
-  } catch (err) {
-    console.warn(
-      `[API] Failed to post dispatch for plan "${planId}" to live backend (${API_BASE_URL}), using mock fallback:`,
-      err
-    );
-
+  if (isDemo) {
     const current = localPlanStore.get(normalized);
     if (current) {
       current.status = "DISPATCHED";
@@ -503,38 +477,68 @@ export async function dispatchPlan(
       attempted_at: new Date().toISOString(),
     };
   }
+
+  // Live Mode: POST /api/plans/{plan_id}/dispatch
+  const encoded = encodeURIComponent(planId);
+  const bodyPayload = JSON.stringify({
+    driver_id: request.driver_id || "driver-default-01",
+    message: request.message || `Emergency dispatch for plan ${planId}`,
+    idempotency_key: request.idempotency_key || `idemp-${planId}-${Date.now()}`,
+  });
+
+  const result = await tryFetch<DispatchResult>(
+    `/api/plans/${encoded}/dispatch`,
+    `/plans/${encoded}/dispatch`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyPayload,
+    }
+  );
+
+  const current = localPlanStore.get(normalized);
+  if (current) {
+    current.status = "DISPATCHED";
+    localPlanStore.set(normalized, current);
+  }
+  return result;
 }
 
 /**
  * Fetch citizen reports from the triage agent.
- * Tries FastAPI backend GET /citizen-reports, falls back to MOCK_REPORTS.
+ * If isDemo is true, returns mock citizen reports.
+ * If isDemo is false, queries live FastAPI GET /api/citizen-reports.
  */
-export async function getCitizenReports(): Promise<CitizenReport[]> {
+export async function getCitizenReports(isDemo: boolean = false): Promise<CitizenReport[]> {
+  if (isDemo) {
+    return structuredClone(MOCK_REPORTS);
+  }
+
   try {
-    const data = await tryFetch<CitizenReport[]>("/citizen-reports", "/api/v1/citizen-reports");
-    if (Array.isArray(data) && data.length > 0) {
+    const data = await tryFetch<CitizenReport[]>("/api/citizen-reports", "/citizen-reports");
+    if (Array.isArray(data)) {
       return data;
     }
-    return structuredClone(MOCK_REPORTS);
+    return [];
   } catch (err) {
     console.warn(
-      `[API] Failed to fetch citizen reports from live backend (${API_BASE_URL}), using mockData fallback:`,
+      `[API:Live] Failed to fetch citizen reports from live backend (${API_BASE_URL}):`,
       err
     );
-    return structuredClone(MOCK_REPORTS);
+    return [];
   }
 }
 
 /**
  * Fetch audit trail events for a plan entity.
- * Tries FastAPI backend GET /audit-events, falls back to synthetic timeline.
+ * Tries FastAPI backend GET /api/audit-events, falls back to synthetic timeline.
  */
 export async function getAuditEvents(entityId: string): Promise<AuditEvent[]> {
   try {
     const encoded = encodeURIComponent(entityId);
     return await tryFetch<AuditEvent[]>(
-      `/audit-events?entity_id=${encoded}`,
-      `/api/v1/audit-events?entity_id=${encoded}`
+      `/api/audit-events?entity_id=${encoded}`,
+      `/audit-events?entity_id=${encoded}`
     );
   } catch (err) {
     console.warn(

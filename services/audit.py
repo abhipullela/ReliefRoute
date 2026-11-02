@@ -6,6 +6,7 @@ import os
 import psycopg
 from dotenv import load_dotenv
 
+from psycopg.rows import dict_row
 from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import AuditEvent
@@ -74,6 +75,52 @@ class PostgreSQLAuditService:
             raise ReliefRouteError(
                 ErrorCode.UPSTREAM_UNAVAILABLE,
                 "Could not persist the audit event.",
+                retryable=True,
+                provider="postgresql",
+                details={"error_type": type(exc).__name__},
+            ) from exc
+
+    async def list_by_entity(self, entity_id: str, limit: int = 50) -> list[AuditEvent]:
+        """Retrieve audit events for a specific entity."""
+
+        try:
+            async with await psycopg.AsyncConnection.connect(
+                self.database_url,
+                row_factory=dict_row,
+                connect_timeout=5,
+            ) as connection:
+                cursor = await connection.execute(
+                    """
+                    SELECT event_id, occurred_at, actor, action,
+                           entity_type, entity_id, outcome, details, source_refs
+                    FROM audit_events
+                    WHERE entity_id = %s
+                    ORDER BY occurred_at ASC
+                    LIMIT %s
+                    """,
+                    (entity_id, limit),
+                )
+                rows = await cursor.fetchall()
+
+            return [
+                AuditEvent(
+                    event_id=r["event_id"],
+                    occurred_at=r["occurred_at"],
+                    actor=r["actor"],
+                    action=r["action"],
+                    entity_type=r["entity_type"],
+                    entity_id=r["entity_id"],
+                    outcome=r["outcome"],
+                    details=r["details"] if isinstance(r["details"], dict) else json.loads(r["details"] or "{}"),
+                    source_refs=r["source_refs"] if isinstance(r["source_refs"], list) else json.loads(r["source_refs"] or "[]"),
+                )
+                for r in rows
+            ]
+
+        except psycopg.Error as exc:
+            raise ReliefRouteError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                "Could not retrieve audit events.",
                 retryable=True,
                 provider="postgresql",
                 details={"error_type": type(exc).__name__},

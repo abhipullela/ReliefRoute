@@ -6,13 +6,12 @@ Important:
 - Missing or insufficient weather data results in UNKNOWN risk.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from shared.enums import ErrorCode, RiskLevel
 from shared.errors import ReliefRouteError
 from shared.models import HazardAssessment, WeatherObservation
-
 
 PROVIDER_NAME = "Open-Meteo Forecast API"
 
@@ -37,7 +36,7 @@ class RainfallHazardService:
                 "At least one weather observation is required for hazard assessment.",
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Forecast intervals must be timezone-aware and have positive duration.
         for observation in observations:
@@ -72,7 +71,7 @@ class RainfallHazardService:
         current_or_future = [
             observation
             for observation in observations
-            if observation.forecast_end.astimezone(timezone.utc) > now
+            if observation.forecast_end.astimezone(UTC) > now
         ]
 
         if not current_or_future:

@@ -19,20 +19,19 @@ def main():
         with psycopg.connect(
             database_url,
             connect_timeout=10,
-        ) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT version(), NOW()")
-                version, database_time = cursor.fetchone()
+        ) as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT version(), NOW()")
+            version, database_time = cursor.fetchone()
 
-                cursor.execute(
-                    """
+            cursor.execute(
+                """
                     SELECT tablename
                     FROM pg_tables
                     WHERE schemaname = 'public'
                     ORDER BY tablename
                     """
-                )
-                tables = [row[0] for row in cursor.fetchall()]
+            )
+            tables = [row[0] for row in cursor.fetchall()]
 
         print("SUCCESS: Connected to PostgreSQL.")
         print("Database time:", database_time)

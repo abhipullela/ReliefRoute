@@ -3,15 +3,15 @@
 import asyncio
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 from dotenv import load_dotenv
 
+from services.telemetry import PostgreSQLTelemetryService
 from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import DriverLocation, LatLon
-from services.telemetry import PostgreSQLTelemetryService
 
 load_dotenv()
 
@@ -24,7 +24,7 @@ async def main() -> None:
     service = PostgreSQLTelemetryService(database_url)
     driver_id = f"telemetry-test-{uuid.uuid4().hex}"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     older = DriverLocation(
         driver_id=driver_id,

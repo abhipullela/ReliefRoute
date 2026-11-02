@@ -1,7 +1,7 @@
 """Live hourly precipitation forecasts from the Open-Meteo Forecast API."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -9,7 +9,6 @@ import httpx
 from shared.enums import ErrorCode
 from shared.errors import ReliefRouteError
 from shared.models import LatLon, SourceRef, WeatherObservation
-
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 PROVIDER_NAME = "Open-Meteo Forecast API"
@@ -219,7 +218,7 @@ class OpenMeteoWeatherService:
                 provider=PROVIDER_NAME,
             )
 
-        retrieved_at = datetime.now(timezone.utc)
+        retrieved_at = datetime.now(UTC)
         observations: list[WeatherObservation] = []
 
         for index, (raw_time, raw_precipitation) in enumerate(
@@ -240,11 +239,11 @@ class OpenMeteoWeatherService:
                 # Open-Meteo may return naive timestamps when timezone=UTC.
                 if forecast_start.tzinfo is None:
                     forecast_start = forecast_start.replace(
-                        tzinfo=timezone.utc
+                        tzinfo=UTC
                     )
                 else:
                     forecast_start = forecast_start.astimezone(
-                        timezone.utc
+                        UTC
                     )
 
             except ValueError as exc:

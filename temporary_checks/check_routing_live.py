@@ -1,7 +1,7 @@
 import asyncio
 
-from shared.models import LatLon, RouteRequest
 from services.routing import OSRMRoutingService
+from shared.models import LatLon, RouteRequest
 
 
 async def main():

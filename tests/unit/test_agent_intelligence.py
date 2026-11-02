@@ -1,9 +1,9 @@
 from agent.intelligence import validate_emergency_report
+from shared.enums import EmergencyUrgency, VerificationStatus
 from shared.models import (
     ExtractedEmergencyReport,
     ExtractedNeed,
 )
-from shared.enums import EmergencyUrgency, VerificationStatus
 
 
 def test_valid_emergency_report():
@@ -72,12 +72,11 @@ def test_unspecified_quantity():
 
     assert result.structurally_valid is True
     assert "quantity_for_food" in result.clarification_fields
+
 import pytest
-from unittest.mock import AsyncMock
 
-import agent.intelligence as intelligence
-
-from shared.models import CitizenReport, LatLon
+from agent import intelligence
+from shared.models import CitizenReport
 
 
 class MockResponse:

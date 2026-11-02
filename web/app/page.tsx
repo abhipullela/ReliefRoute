@@ -33,9 +33,9 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    // Smooth transition into the interactive operations map
+    // Smooth transition into the interactive operations map (Live mode)
     setTimeout(() => {
-      router.push("/map");
+      router.push("/map?mode=live");
     }, 700);
   }
 
@@ -44,8 +44,9 @@ export default function LoginPage() {
     setPassword("ReliefRoute2024!");
     setError("");
     setLoading(true);
+    // Demo mode with pre-seeded scenario plans
     setTimeout(() => {
-      router.push("/map");
+      router.push("/map?mode=demo");
     }, 500);
   }
 

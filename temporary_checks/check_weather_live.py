@@ -1,7 +1,7 @@
 import asyncio
 
-from shared.models import LatLon
 from services.weather import OpenMeteoWeatherService
+from shared.models import LatLon
 
 
 async def main() -> None:

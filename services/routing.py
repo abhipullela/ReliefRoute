@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from shapely.geometry import LineString, shape
 from shapely.errors import ShapelyError
+from shapely.geometry import shape
 
 from shared.enums import ErrorCode, RiskLevel
 from shared.errors import ReliefRouteError
 from shared.models import RouteRequest, RouteResult, SourceRef
-
-from datetime import datetime, timezone
 
 OSRM_BASE_URL = "https://router.project-osrm.org"
 OSRM_PROVIDER = "OSRM public routing service"
@@ -178,7 +177,7 @@ class OSRMRoutingService:
             source=SourceRef(
                 provider=OSRM_PROVIDER,
                 url=url,
-                retrieved_at=datetime.now(timezone.utc)
+                retrieved_at=datetime.now(UTC)
                 if hasattr(httpx, "Timestamp")
                 else __import__("datetime").datetime.now(
                     __import__("datetime").timezone.utc

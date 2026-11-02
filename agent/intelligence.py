@@ -3,9 +3,8 @@ import json
 import httpx
 
 from agent.config import settings
-from shared.enums import EmergencyUrgency, VerificationStatus
-from shared.models import CitizenReport, ExtractedEmergencyReport,ReportValidationResult
-
+from shared.enums import VerificationStatus
+from shared.models import CitizenReport, ExtractedEmergencyReport, ReportValidationResult
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 

@@ -4,7 +4,7 @@ Allows clean separation between Member A's orchestration and Member B's service
 implementations (or mocks during isolated unit testing).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from agent.planner import DefaultPlanningService
 from shared.contracts import (

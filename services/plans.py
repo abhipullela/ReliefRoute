@@ -125,6 +125,32 @@ class PostgreSQLPlanningStore:
                 details={"error_type": type(exc).__name__},
             ) from exc
 
+    async def list_plans(self, limit: int = 50) -> list[DeliveryPlan]:
+        """Retrieve recent plans ordered by creation time."""
+
+        try:
+            async with await psycopg.AsyncConnection.connect(
+                self.database_url,
+                row_factory=dict_row,
+                connect_timeout=5,
+            ) as connection:
+                cursor = await connection.execute(
+                    "SELECT payload FROM plans ORDER BY created_at DESC LIMIT %s",
+                    (limit,),
+                )
+                rows = await cursor.fetchall()
+
+            return [DeliveryPlan.model_validate(r["payload"]) for r in rows]
+
+        except psycopg.Error as exc:
+            raise ReliefRouteError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                "Could not retrieve delivery plans.",
+                retryable=True,
+                provider="postgresql",
+                details={"error_type": type(exc).__name__},
+            ) from exc
+
     async def update_status(
         self, plan_id: str, status: PlanStatus
     ) -> DeliveryPlan:

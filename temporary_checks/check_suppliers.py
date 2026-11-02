@@ -7,7 +7,7 @@ Do not use these records as demo or production inventory.
 import asyncio
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 from dotenv import load_dotenv
@@ -31,7 +31,7 @@ async def main():
     inactive_id = f"test-inactive-{test_id}"
     expired_id = f"test-expired-{test_id}"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     active_supplier = Supplier(
         supplier_id=active_id,
@@ -176,16 +176,15 @@ async def main():
     finally:
         # Delete only the records created by this test.
         # Inventory must be deleted before its referenced suppliers.
-        with psycopg.connect(database_url) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "DELETE FROM inventory WHERE supplier_id = ANY(%s)",
-                    (supplier_ids,),
-                )
-                cursor.execute(
-                    "DELETE FROM suppliers WHERE supplier_id = ANY(%s)",
-                    (supplier_ids,),
-                )
+        with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM inventory WHERE supplier_id = ANY(%s)",
+                (supplier_ids,),
+            )
+            cursor.execute(
+                "DELETE FROM suppliers WHERE supplier_id = ANY(%s)",
+                (supplier_ids,),
+            )
 
         print("Test records cleaned up.")
 
